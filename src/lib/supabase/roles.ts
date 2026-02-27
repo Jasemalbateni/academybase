@@ -74,7 +74,7 @@ export async function getMembership(): Promise<MembershipInfo> {
     role === "owner" || role === "partner"
       ? true
       : (memberRes.data?.has_finance_access ?? false);
-  const branchIds = (branchRes.data ?? []).map((r) => r.branch_id as string);
+  const branchIds = (branchRes.data ?? []).map((r: { branch_id: unknown }) => r.branch_id as string);
 
   return { role, hasFinanceAccess, branchIds };
 }

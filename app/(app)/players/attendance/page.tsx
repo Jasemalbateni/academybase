@@ -306,6 +306,28 @@ export default function AttendancePage() {
           map.set(attKey(rec.player_id, rec.date), rec.present);
         }
         setAttendanceMap(map);
+
+        // Fetch academy name sequentially (after parallel loads) so we don't
+        // add a competing getSession() call that races on iOS Safari navigator.locks.
+        try {
+          const supabase = createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("academy_id")
+              .eq("user_id", session.user.id)
+              .maybeSingle();
+            if (profile?.academy_id) {
+              const { data: academy } = await supabase
+                .from("academies")
+                .select("name")
+                .eq("id", profile.academy_id)
+                .single();
+              if (academy?.name) setAcademyName(academy.name);
+            }
+          }
+        } catch { /* non-critical: print header falls back to "الأكاديمية" */ }
       } else {
         // Month change: only re-fetch attendance records (players/branches unchanged)
         const dbAttendance = await listAttendanceByMonth(month);
@@ -326,28 +348,6 @@ export default function AttendancePage() {
   useEffect(() => {
     loadAll(selectedMonth);
   }, [selectedMonth, loadAll]);
-
-  // Fetch academy name once for the print header
-  useEffect(() => {
-    const supabase = createClient();
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("academy_id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (!profile?.academy_id) return;
-      const { data: academy } = await supabase
-        .from("academies")
-        .select("name")
-        .eq("id", profile.academy_id)
-        .single();
-      if (academy?.name) setAcademyName(academy.name);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 

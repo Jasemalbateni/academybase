@@ -1,8 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
-
-export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+// Re-export the singleton browser client from the canonical module.
+// All callers that import from this path get the same shared instance,
+// preventing multiple concurrent navigator.locks on iOS Safari.
+export { createClient } from "./browser";

@@ -73,7 +73,7 @@ export async function listPaymentPeriods(): Promise<PaymentPeriod[]> {
 
   if (error) throw new Error(`${error.message} [${error.code}]`);
 
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map((row: { player_id: string; date: string; subscription_end: unknown }) => ({
     player_id: row.player_id,
     start:     row.date,
     end:       (row.subscription_end as string | null) ?? null,

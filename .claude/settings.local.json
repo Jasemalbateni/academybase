@@ -7,7 +7,8 @@
       "Bash(cd:*)",
       "Bash(ls -lh /c/Users/asus/academybase/supabase/*.sql)",
       "Bash(npx tsc:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run:*)"
     ]
   }
 }
