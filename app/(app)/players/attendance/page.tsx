@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listPlayers, type DbPlayer } from "@/src/lib/supabase/players";
 import { listBranches, type DbBranch } from "@/src/lib/supabase/branches";
 import {
@@ -72,29 +72,18 @@ function getSessionDates(year: number, month: number, branchDays: string[]): Dat
 }
 
 // ── Subscription period end-date computation (for legacy NULL-end rows) ───────
-//
-// Payments inserted before migration 16 have subscription_end = NULL.
-// We fall back to computing the end from the player's current subscription
-// settings — an approximation that works well when settings haven't changed.
 
 /** Last inclusive day of a 1-calendar-month subscription starting on startISO. */
 function computeMonthlyEndISO(startISO: string): string {
   const [y, m, d] = startISO.split("-").map(Number);
-  // Same day in the next calendar month, clamped to that month's last day
-  const nextFirst   = new Date(y, m, 1);                          // 1st of next month
+  const nextFirst   = new Date(y, m, 1);
   const lastOfNext  = new Date(nextFirst.getFullYear(), nextFirst.getMonth() + 1, 0).getDate();
   const dayOfMonth  = Math.min(d, lastOfNext);
   const sameNextDay = new Date(nextFirst.getFullYear(), nextFirst.getMonth(), dayOfMonth);
-  // End = one day before "same day next month" (i.e. last inclusive day)
   sameNextDay.setDate(sameNextDay.getDate() - 1);
   return toISODate(sameNextDay);
 }
 
-/**
- * Last inclusive day of a sessions-based subscription: the date on which the
- * Nth training session falls, counting from startISO. Returns null if the
- * branch has no training days configured or the limit isn't reached in 1 year.
- */
 function computeSessionsEndISO(
   startISO:  string,
   branchDays: string[],
@@ -120,53 +109,25 @@ function computeSessionsEndISO(
 
 // ── Subscription state per date ───────────────────────────────────────────────
 
-/**
- * A resolved subscription period with a definite start and (possibly open) end.
- * Built from payment rows, with legacy NULL-end rows filled in via computation.
- */
 type SubscriptionPeriod = {
   start: string;        // ISO YYYY-MM-DD
   end:   string | null; // ISO YYYY-MM-DD — null = open-ended (no expiry)
 };
 
-/**
- * Three-way state for each session date × player:
- *
- *  "not_subscribed" — before the player's very first payment.  Label: "غير مشترك"
- *  "active"         — inside ANY subscription period.           Editable checkbox.
- *  "expired"        — after first payment but in a gap between  Label: "منتهي الاشتراك"
- *                     periods, or after the last period ended.
- *
- * Using ALL periods (not just the latest one) is what makes this correct after
- * multiple renewals: Feb 1–14 remains active even though the player renewed on
- * Feb 20 (player.start_date was overwritten with Feb 20, but the Feb 1–14
- * window is still covered by the first payment's period).
- */
 export type DateState = "active" | "not_subscribed" | "expired";
 
 function getDateState(
   dateISO: string,
-  periods: SubscriptionPeriod[],  // sorted by start ascending
+  periods: SubscriptionPeriod[],
 ): DateState {
   if (periods.length === 0) return "not_subscribed";
-
-  // Before the very first subscription
   if (dateISO < periods[0].start) return "not_subscribed";
-
-  // Check every period — active if covered by ANY window
   for (const p of periods) {
     if (dateISO >= p.start && (!p.end || dateISO <= p.end)) return "active";
   }
-
-  // After first subscription but not inside any window → gap or final expiry
   return "expired";
 }
 
-/**
- * Returns true if ANY of the player's subscription periods overlaps with the
- * given month. Used to hide players entirely in months where they have no
- * active days at all.
- */
 function isActiveInMonth(
   periods:       SubscriptionPeriod[],
   selectedMonth: string,
@@ -179,8 +140,8 @@ function isActiveInMonth(
   const lastDayISO    = `${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
 
   for (const p of periods) {
-    if (p.start > lastDayISO)           continue; // period starts after month
-    if (p.end && p.end < firstDayISO)   continue; // period ended before month
+    if (p.start > lastDayISO)           continue;
+    if (p.end && p.end < firstDayISO)   continue;
     return true;
   }
   return false;
@@ -193,10 +154,10 @@ type Player = {
   name:             string;
   phone:            string;
   branchId:         string | null;
-  subscriptionMode: string;   // "شهري" | "حصص"
-  sessions:         number;   // used for legacy NULL-end fallback computation
-  startDate:        string;   // ISO — current subscription start
-  endDate:          string | null; // ISO — current subscription end (or null)
+  subscriptionMode: string;
+  sessions:         number;
+  startDate:        string;
+  endDate:          string | null;
 };
 
 type BranchLite = {
@@ -235,9 +196,6 @@ function dbToBranch(db: DbBranch): BranchLite {
 }
 
 // ── Period map builder ────────────────────────────────────────────────────────
-//
-// Converts raw PaymentPeriod rows into resolved SubscriptionPeriod[] per player.
-// For legacy rows (subscription_end = NULL) the end is filled in via computation.
 
 function buildPeriodsMap(
   rawPeriods:  PaymentPeriod[],
@@ -246,7 +204,6 @@ function buildPeriodsMap(
 ): Map<string, SubscriptionPeriod[]> {
   const playerMap = new Map(players.map((p) => [p.id, p]));
 
-  // Group by player, maintaining ascending-date order (guaranteed by query ORDER BY)
   const byPlayer = new Map<string, PaymentPeriod[]>();
   for (const row of rawPeriods) {
     if (!byPlayer.has(row.player_id)) byPlayer.set(row.player_id, []);
@@ -260,14 +217,11 @@ function buildPeriodsMap(
     const branch = player?.branchId ? branchMap.get(player.branchId) : undefined;
 
     const periods: SubscriptionPeriod[] = rows.map((row, idx) => {
-      // subscription_end already stored (migration 16+)
       if (row.end !== null) return { start: row.start, end: row.end };
 
-      // ── Legacy row: compute the end date as best-effort ──────────────────
       const isLast = idx === rows.length - 1;
 
       if (isLast && player?.endDate) {
-        // Latest payment → player.end_date is always the current subscription end
         return { start: row.start, end: player.endDate };
       }
 
@@ -281,7 +235,6 @@ function buildPeriodsMap(
         }
       }
 
-      // No branch / mode info — treat as open-ended (conservative: mark active)
       return { start: row.start, end: null };
     });
 
@@ -324,35 +277,51 @@ export default function AttendancePage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // ── Performance: track whether static data (players/branches/periods) has
+  //    been loaded so we skip refetching it when only the month changes.
+  const staticLoadedRef = useRef(false);
+
   // ── Load ────────────────────────────────────────────────────────────────────
 
   const loadAll = useCallback(async (month: string) => {
     setLoading(true);
     setPageError(null);
     try {
-      const [dbPlayers, dbBranches, dbAttendance, periods] = await Promise.all([
-        listPlayers(),
-        listBranches(),
-        listAttendanceByMonth(month),
-        listPaymentPeriods(),
-      ]);
+      if (!staticLoadedRef.current) {
+        // First load: fetch everything in parallel
+        const [dbPlayers, dbBranches, dbAttendance, periods] = await Promise.all([
+          listPlayers(),
+          listBranches(),
+          listAttendanceByMonth(month),
+          listPaymentPeriods(),
+        ]);
 
-      setPlayers(dbPlayers.map(dbToPlayer));
-      setBranches(dbBranches.map(dbToBranch));
-      setPaymentRaws(periods);
+        setPlayers(dbPlayers.map(dbToPlayer));
+        setBranches(dbBranches.map(dbToBranch));
+        setPaymentRaws(periods);
+        staticLoadedRef.current = true;
 
-      const map: AttendanceMap = new Map();
-      for (const rec of dbAttendance) {
-        map.set(attKey(rec.player_id, rec.date), rec.present);
+        const map: AttendanceMap = new Map();
+        for (const rec of dbAttendance) {
+          map.set(attKey(rec.player_id, rec.date), rec.present);
+        }
+        setAttendanceMap(map);
+      } else {
+        // Month change: only re-fetch attendance records (players/branches unchanged)
+        const dbAttendance = await listAttendanceByMonth(month);
+        const map: AttendanceMap = new Map();
+        for (const rec of dbAttendance) {
+          map.set(attKey(rec.player_id, rec.date), rec.present);
+        }
+        setAttendanceMap(map);
       }
-      setAttendanceMap(map);
     } catch (e) {
       console.error("[attendance] load error:", e);
       setPageError(formatError(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // stable — uses ref, not state
 
   useEffect(() => {
     loadAll(selectedMonth);
@@ -393,20 +362,11 @@ export default function AttendancePage() {
     [selectedMonth]
   );
 
-  /**
-   * Resolved subscription periods per player, built from payment history.
-   * For legacy payments (subscription_end = NULL), end dates are computed
-   * from the player's current subscription settings as a best-effort fallback.
-   */
   const periodsMap = useMemo(
     () => buildPeriodsMap(paymentRaws, players, branchMap),
     [paymentRaws, players, branchMap]
   );
 
-  /**
-   * Only show players with at least one session date active in the selected
-   * month, determined by checking ALL their subscription periods.
-   */
   const activePlayers = useMemo(
     () => players.filter((p) => isActiveInMonth(periodsMap.get(p.id) ?? [], selectedMonth)),
     [players, periodsMap, selectedMonth]
@@ -419,7 +379,6 @@ export default function AttendancePage() {
 
   // ── Print data ──────────────────────────────────────────────────────────────
 
-  /** Union of all session dates across filtered players' branches, sorted. */
   const printSessionDates = useMemo(() => {
     const dates = new Set<string>();
     for (const player of filteredPlayers) {
@@ -432,7 +391,6 @@ export default function AttendancePage() {
     return Array.from(dates).sort();
   }, [filteredPlayers, branchMap, year, month]);
 
-  /** Session date groups by week (days 1-7, 8-14, 15-21, 22-28, 29+). */
   const weeksInMonth = useMemo(() => {
     const chunks: [number, number][] = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 31]];
     const lastDay = new Date(year, month, 0).getDate();
@@ -449,18 +407,15 @@ export default function AttendancePage() {
     return groups;
   }, [printSessionDates, year, month]);
 
-  /** Dates to show in the print sheet — full month, selected week, or custom range. */
   const printSessionDatesFinal = useMemo(() => {
     if (printMode === "monthly") return printSessionDates;
     if (printMode === "weekly")  return weeksInMonth[printWeekIdx]?.dates ?? printSessionDates;
-    // custom
     if (!printCustomStart || !printCustomEnd) return printSessionDates;
     return printSessionDates.filter(
       (iso) => iso >= printCustomStart && iso <= printCustomEnd
     );
   }, [printMode, printSessionDates, weeksInMonth, printWeekIdx, printCustomStart, printCustomEnd]);
 
-  /** Player × session date matrix with symbols: ✓ ✕ ○ (blank = not_subscribed). */
   const printData = useMemo(() => {
     return filteredPlayers
       .map((player) => {
@@ -475,8 +430,7 @@ export default function AttendancePage() {
         return { player, branch, symbols };
       })
       .filter(({ symbols }) => {
-        if (printMode === "monthly") return true; // show all in monthly view
-        // For weekly/custom: hide players with no active sessions in the range
+        if (printMode === "monthly") return true;
         return symbols.some((s) => s === "✓" || s === "✕");
       });
   }, [filteredPlayers, periodsMap, printSessionDatesFinal, attendanceMap, branchMap, printMode]);
@@ -538,7 +492,8 @@ export default function AttendancePage() {
       )}
 
       {/* Controls bar */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 flex flex-col gap-3">
+        {/* Month selector row */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-white/60 shrink-0">الشهر:</span>
           <input
@@ -551,75 +506,75 @@ export default function AttendancePage() {
             {formatMonthArabic(selectedMonth)}
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          {!loading && (
-            <span className="text-xs text-white/40">
-              {filteredPlayers.length} لاعب نشط هذا الشهر
-            </span>
-          )}
-          {!loading && filteredPlayers.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              {/* Mode toggle */}
-              <div className="flex rounded-lg overflow-hidden border border-white/10 text-xs">
-                {(["monthly", "weekly", "custom"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setPrintMode(m);
-                      setPrintWeekIdx(0);
-                      if (m === "custom") {
-                        const [y, mo] = selectedMonth.split("-").map(Number);
-                        const lastDay = new Date(y, mo, 0).getDate();
-                        if (!printCustomStart) setPrintCustomStart(`${selectedMonth}-01`);
-                        if (!printCustomEnd)   setPrintCustomEnd(`${selectedMonth}-${String(lastDay).padStart(2, "0")}`);
-                      }
-                    }}
-                    className={`px-3 py-1.5 transition ${printMode === m ? "bg-white/15 text-white" : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"}`}
-                  >
-                    {m === "monthly" ? "شهري" : m === "weekly" ? "أسبوعي" : "مخصص"}
-                  </button>
-                ))}
-              </div>
-              {/* Custom date pickers (only in custom mode) */}
-              {printMode === "custom" && (
-                <div className="flex items-center gap-1.5 text-xs">
-                  <input
-                    type="date"
-                    value={printCustomStart}
-                    onChange={(e) => setPrintCustomStart(e.target.value)}
-                    className="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white outline-none focus:border-emerald-400/60 [color-scheme:dark]"
-                  />
-                  <span className="text-white/40">—</span>
-                  <input
-                    type="date"
-                    value={printCustomEnd}
-                    onChange={(e) => setPrintCustomEnd(e.target.value)}
-                    className="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white outline-none focus:border-emerald-400/60 [color-scheme:dark]"
-                  />
-                </div>
-              )}
-              {/* Week chips (only in weekly mode) */}
-              {printMode === "weekly" && weeksInMonth.map((w, i) => (
+
+        {/* Print controls row */}
+        {!loading && filteredPlayers.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {!loading && (
+              <span className="text-xs text-white/40 shrink-0">
+                {filteredPlayers.length} لاعب نشط هذا الشهر
+              </span>
+            )}
+            {/* Mode toggle */}
+            <div className="flex rounded-lg overflow-hidden border border-white/10 text-xs">
+              {(["monthly", "weekly", "custom"] as const).map((m) => (
                 <button
-                  key={i}
+                  key={m}
                   type="button"
-                  onClick={() => setPrintWeekIdx(i)}
-                  className={`px-2.5 py-1 rounded-full text-xs transition border ${printWeekIdx === i ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"}`}
+                  onClick={() => {
+                    setPrintMode(m);
+                    setPrintWeekIdx(0);
+                    if (m === "custom") {
+                      const [y, mo] = selectedMonth.split("-").map(Number);
+                      const lastDay = new Date(y, mo, 0).getDate();
+                      if (!printCustomStart) setPrintCustomStart(`${selectedMonth}-01`);
+                      if (!printCustomEnd)   setPrintCustomEnd(`${selectedMonth}-${String(lastDay).padStart(2, "0")}`);
+                    }
+                  }}
+                  className={`px-3 py-1.5 transition ${printMode === m ? "bg-white/15 text-white" : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"}`}
                 >
-                  {w.label}
+                  {m === "monthly" ? "شهري" : m === "weekly" ? "أسبوعي" : "مخصص"}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:bg-white/10 hover:text-white transition"
-              >
-                🖨 طباعة الكشف
-              </button>
             </div>
-          )}
-        </div>
+            {/* Custom date pickers */}
+            {printMode === "custom" && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <input
+                  type="date"
+                  value={printCustomStart}
+                  onChange={(e) => setPrintCustomStart(e.target.value)}
+                  className="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white outline-none focus:border-emerald-400/60 [color-scheme:dark]"
+                />
+                <span className="text-white/40">—</span>
+                <input
+                  type="date"
+                  value={printCustomEnd}
+                  onChange={(e) => setPrintCustomEnd(e.target.value)}
+                  className="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white outline-none focus:border-emerald-400/60 [color-scheme:dark]"
+                />
+              </div>
+            )}
+            {/* Week chips */}
+            {printMode === "weekly" && weeksInMonth.map((w, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPrintWeekIdx(i)}
+                className={`px-2.5 py-1 rounded-full text-xs transition border ${printWeekIdx === i ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"}`}
+              >
+                {w.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:bg-white/10 hover:text-white transition shrink-0"
+            >
+              🖨 طباعة الكشف
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Branch filter tabs */}
@@ -688,9 +643,6 @@ export default function AttendancePage() {
       )}
 
       {/* ── Printable attendance sheet ──────────────────────────────────────── */}
-      {/* Hidden on screen via @media screen; visible in print via @media print.  */}
-      {/* IMPORTANT: must NOT have display:none inline — visibility:visible cannot */}
-      {/* override an inline display:none. Use @media screen rule instead.        */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media screen {
           #attendance-print-sheet { display: none; }

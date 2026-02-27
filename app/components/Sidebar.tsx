@@ -10,13 +10,16 @@ const NavItem = ({
   href,
   label,
   active = false,
+  onClick,
 }: {
   href: string;
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) => (
   <Link
     href={href}
+    onClick={onClick}
     className={[
       "block rounded-xl px-4 py-3 text-sm transition",
       active ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white",
@@ -26,14 +29,21 @@ const NavItem = ({
   </Link>
 );
 
-export default function Sidebar() {
+export default function Sidebar({
+  mobileOpen = false,
+  onMobileClose,
+}: {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}) {
   const router   = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
+  // Stable Supabase client — created once, not on every render
+  const supabase = useMemo(() => createClient(), []);
 
-  const [academyName, setAcademyName]       = useState<string>("");
-  const [userName,    setUserName]          = useState<string>("");
-  const [userRole, setUserRole]             = useState<UserRole>("admin_staff");
+  const [academyName, setAcademyName]        = useState<string>("");
+  const [userName,    setUserName]           = useState<string>("");
+  const [userRole,    setUserRole]           = useState<UserRole>("admin_staff");
   const [hasFinanceAccess, setFinanceAccess] = useState(false);
 
   useEffect(() => {
@@ -41,7 +51,6 @@ export default function Sidebar() {
 
     const run = async () => {
       // getSession reads from the cookie — no extra network round-trip.
-      // Security is enforced by RLS; Sidebar only needs the user id for display.
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (!user || cancelled) return;
@@ -77,7 +86,6 @@ export default function Sidebar() {
       const role = (memberRes.data?.role as UserRole) ?? "admin_staff";
       setUserRole(role);
 
-      // owner and partner always have finance access
       const financeAccess =
         role === "owner" || role === "partner"
           ? true
@@ -114,38 +122,63 @@ export default function Sidebar() {
     : null;
 
   return (
-    <aside className="w-[260px] shrink-0 bg-[#111827] text-white h-screen sticky top-0 flex flex-col">
-      <div className="p-6 flex-1">
-        {/* Logo + Title */}
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold">
-            {logoLetter}
+    <aside
+      className={[
+        // Mobile: fixed overlay drawer sliding in from the right (RTL)
+        // Desktop (md+): sticky in-flow sidebar
+        "fixed md:sticky top-0 right-0",
+        "w-[260px] h-screen",
+        "z-50 md:z-auto shrink-0",
+        "bg-[#111827] text-white flex flex-col",
+        "transition-transform duration-300 ease-in-out",
+        mobileOpen ? "translate-x-0" : "translate-x-full md:translate-x-0",
+      ].join(" ")}
+    >
+      <div className="p-6 flex-1 overflow-y-auto">
+        {/* ── Header row: Logo + Title + Close button (mobile) ─────────────── */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold shrink-0">
+              {logoLetter}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate">{title}</div>
+              <div className="text-xs text-white/60">لوحة الإدارة</div>
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">{title}</div>
-            <div className="text-xs text-white/60">لوحة الإدارة</div>
-          </div>
+
+          {/* Close button — visible on mobile only */}
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="md:hidden p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition shrink-0"
+            aria-label="إغلاق القائمة"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Nav */}
-        <nav className="mt-8 space-y-2">
-          <NavItem href="/dashboard"           label="لوحة التحكم"       active={active === "dashboard"} />
-          <NavItem href="/players"             label="اللاعبين"           active={active === "players" && !pathname.startsWith("/players/attendance")} />
-          <NavItem href="/players/attendance"  label="سجل الحضور"        active={pathname.startsWith("/players/attendance")} />
-          <NavItem href="/calendar"            label="التقويم"            active={active === "calendar"} />
-          <NavItem href="/insights"            label="التنبيهات الذكية"  active={active === "insights"} />
-          <NavItem href="/statistics"          label="الإحصائيات"         active={active === "statistics"} />
+        <nav className="mt-6 space-y-1">
+          <NavItem href="/dashboard"          label="لوحة التحكم"      active={active === "dashboard"}                                         onClick={onMobileClose} />
+          <NavItem href="/players"            label="اللاعبين"          active={active === "players" && !pathname.startsWith("/players/attendance")} onClick={onMobileClose} />
+          <NavItem href="/players/attendance" label="سجل الحضور"       active={pathname.startsWith("/players/attendance")}                     onClick={onMobileClose} />
+          <NavItem href="/calendar"           label="التقويم"           active={active === "calendar"}                                         onClick={onMobileClose} />
+          <NavItem href="/insights"           label="التنبيهات الذكية" active={active === "insights"}                                         onClick={onMobileClose} />
+          <NavItem href="/statistics"         label="الإحصائيات"        active={active === "statistics"}                                       onClick={onMobileClose} />
           {canSeeFinance && (
-            <NavItem href="/finance"           label="الادارة المالية"   active={active === "finance"} />
+            <NavItem href="/finance"          label="الادارة المالية"  active={active === "finance"}                                          onClick={onMobileClose} />
           )}
-          <NavItem href="/branches"            label="الفروع"             active={active === "branches"} />
+          <NavItem href="/branches"           label="الفروع"            active={active === "branches"}                                         onClick={onMobileClose} />
           {canSeeStaff && (
-            <NavItem href="/staff"             label="الطاقم"             active={active === "staff"} />
+            <NavItem href="/staff"            label="الطاقم"            active={active === "staff"}                                            onClick={onMobileClose} />
           )}
           {canSeeStaff && (
-            <NavItem href="/staff/attendance"  label="حضور الطاقم"        active={active === "staff_attendance"} />
+            <NavItem href="/staff/attendance" label="حضور الطاقم"      active={active === "staff_attendance"}                                 onClick={onMobileClose} />
           )}
-          <NavItem href="/settings"            label="الإعدادات"          active={active === "settings"} />
+          <NavItem href="/settings"           label="الإعدادات"         active={active === "settings"}                                         onClick={onMobileClose} />
         </nav>
       </div>
 

@@ -365,7 +365,6 @@ export default function PlayersPage() {
   // ── Start date text-input handler (DD/MM/YYYY ↔ ISO) ─────────────────────
   function handleStartDateTextChange(text: string) {
     setStartDateText(text);
-    // Convert to ISO as soon as the user finishes a valid DD/MM/YYYY date
     if (text.length === 10 && /^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
       const iso = ddmmyyyyToISO(text);
       if (iso) setStartDate(iso);
@@ -511,7 +510,6 @@ export default function PlayersPage() {
     setBirth(p.birth);
     setPhone(p.phone ?? "");
     setBranchId(p.branchId ?? "");
-    // start date = max(today, end+1)
     const endDate = ddmmyyyyToDate(p.end);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -538,7 +536,6 @@ export default function PlayersPage() {
   async function savePlayer() {
     setSaveError(null);
 
-    // Validation
     if (!name.trim() || !birth.trim() || !branchId) {
       setSaveError("يرجى تعبئة الاسم + سنة الميلاد + الفرع.");
       return;
@@ -558,7 +555,6 @@ export default function PlayersPage() {
       return;
     }
 
-    // Compute end date
     let sessions = 0;
     let endDateISO: string | null = null;
 
@@ -586,7 +582,6 @@ export default function PlayersPage() {
     setSaving(true);
     try {
       if (modalType === "add") {
-        // Duplicate check
         const existing = findExistingPlayer(players, { name: name.trim(), birth: birth.trim() });
         if (existing) {
           setSaveError(
@@ -596,7 +591,6 @@ export default function PlayersPage() {
           return;
         }
 
-        // Create player
         const dbPlayer = await createPlayer({
           branch_id: branchId || null,
           name: name.trim(),
@@ -610,8 +604,6 @@ export default function PlayersPage() {
           is_legacy: isLegacy,
         });
 
-        // Create payment record (subscription_end stored for full period history)
-        // Legacy players use kind:"legacy" so they're excluded from "new this month" analytics
         await createPayment({
           branch_id:        branchId || null,
           player_id:        dbPlayer.id,
@@ -626,7 +618,6 @@ export default function PlayersPage() {
         return;
       }
 
-      // edit / renew
       if (!activePlayerId) return;
 
       const dbPlayer = await updatePlayer(activePlayerId, {
@@ -646,7 +637,6 @@ export default function PlayersPage() {
         prev.map((p) => (p.id === activePlayerId ? dbToPlayer(dbPlayer) : p))
       );
 
-      // Renewal creates a payment record (subscription_end stored for full period history)
       if (modalType === "renew") {
         await createPayment({
           branch_id:        branchId || null,
@@ -701,119 +691,210 @@ export default function PlayersPage() {
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   return (
-    <main className="flex-1 p-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold">اللاعبين</h1>
-          <Link
-            href="/players/attendance"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+    <main className="flex-1 p-4 md:p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-semibold">اللاعبين</h1>
+        <Link
+          href="/players/attendance"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs md:text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+        >
+          📋 سجل الحضور
+        </Link>
+      </div>
+
+      {/* Page-level error */}
+      {pageError && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {pageError}
+          <button
+            onClick={loadData}
+            className="mr-3 underline text-red-300 hover:text-red-200"
+            type="button"
           >
-            📋 سجل الحضور
-          </Link>
+            إعادة المحاولة
+          </button>
+        </div>
+      )}
+
+      {/* Control Bar */}
+      <div className="bg-[#111827] rounded-2xl p-4 space-y-3">
+        {/* Row 1: Search + Branch filter */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full sm:flex-1 h-11 rounded-xl bg-[#0F172A] border border-white/10 px-4 text-white outline-none focus:border-white/25"
+            placeholder="ابحث بالاسم أو رقم ولي الأمر…"
+          />
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="w-full sm:w-[220px] h-11 rounded-xl bg-[#0F172A] border border-white/10 px-4 text-white outline-none focus:border-white/25"
+          >
+            <option value="all">كل الفروع (الأكاديمية)</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Page-level error */}
-        {pageError && (
-          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            {pageError}
-            <button
-              onClick={loadData}
-              className="mr-3 underline text-red-300 hover:text-red-200"
-              type="button"
-            >
-              إعادة المحاولة
-            </button>
-          </div>
-        )}
-
-        {/* Control Bar */}
-        <div className="bg-[#111827] rounded-2xl p-4 space-y-4">
-          <div className="flex items-center gap-4 flex-wrap">
-            {/* Search */}
-            <div className="flex-1 min-w-[260px]">
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-11 rounded-xl bg-[#0F172A] border border-white/10 px-4 text-white outline-none focus:border-white/25"
-                placeholder="ابحث بالاسم أو رقم ولي الأمر…"
-              />
-            </div>
-
-            {/* Branch Filter */}
-            <div className="min-w-[220px]">
-              <select
-                value={branchFilter}
-                onChange={(e) => setBranchFilter(e.target.value)}
-                className="w-full h-11 rounded-xl bg-[#0F172A] border border-white/10 px-4 text-white outline-none focus:border-white/25"
+        {/* Row 2: Status filter chips — horizontal scroll on mobile */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+          {filterButtons.map((btn) => {
+            const isActive = activeFilter === btn.key;
+            return (
+              <button
+                key={btn.key}
+                onClick={() => setActiveFilter(btn.key)}
+                className={[
+                  "shrink-0 h-9 px-4 rounded-full text-sm transition",
+                  isActive
+                    ? "bg-white/10 text-white"
+                    : "bg-[#0F172A] text-white/70 hover:bg-white/5 hover:text-white",
+                ].join(" ")}
+                type="button"
               >
-                <option value="all">كل الفروع (الأكاديمية)</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status Filters */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {filterButtons.map((btn) => {
-                const active = activeFilter === btn.key;
-                return (
-                  <button
-                    key={btn.key}
-                    onClick={() => setActiveFilter(btn.key)}
-                    className={[
-                      "h-9 px-4 rounded-full text-sm transition",
-                      active
-                        ? "bg-white/10 text-white"
-                        : "bg-[#0F172A] text-white/70 hover:bg-white/5 hover:text-white",
-                    ].join(" ")}
-                    type="button"
-                  >
-                    {btn.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button onClick={openAddModal} disabled={loading}>
-              + إضافة لاعب
-            </Button>
-
-            {!loading && branches.length === 0 && (
-              <div className="text-xs text-amber-200/90">
-                لا يوجد فروع بعد — أضف فرعًا من صفحة الفروع أولاً.
-              </div>
-            )}
-
-            <div className="text-xs text-white/50">
-              عدد النتائج:{" "}
-              <span className="text-white">{filteredPlayers.length}</span>
-            </div>
-
-            <Button
-              variant="secondary"
-              onClick={() => printPlayers(filteredPlayers)}
-              disabled={loading}
-            >
-              🖨️ طباعة القائمة
-            </Button>
-          </div>
+                {btn.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="mt-6 text-white/60 text-sm px-2">
-            جاري التحميل...
-          </div>
-        )}
+        {/* Row 3: Actions */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button onClick={openAddModal} disabled={loading}>
+            + إضافة لاعب
+          </Button>
 
-        {/* Table */}
-        {!loading && (
-          <div className="mt-6 bg-[#111827] rounded-2xl overflow-hidden border border-white/5">
+          {!loading && branches.length === 0 && (
+            <div className="text-xs text-amber-200/90">
+              لا يوجد فروع بعد — أضف فرعًا من صفحة الفروع أولاً.
+            </div>
+          )}
+
+          <div className="text-xs text-white/50">
+            عدد النتائج:{" "}
+            <span className="text-white">{filteredPlayers.length}</span>
+          </div>
+
+          <Button
+            variant="secondary"
+            onClick={() => printPlayers(filteredPlayers)}
+            disabled={loading}
+          >
+            🖨️ طباعة القائمة
+          </Button>
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="mt-6 text-white/60 text-sm px-2">
+          جاري التحميل...
+        </div>
+      )}
+
+      {!loading && (
+        <>
+          {/* ── Mobile card list (hidden on md+) ─────────────────────────── */}
+          <div className="mt-4 md:hidden space-y-3">
+            {filteredPlayers.length === 0 ? (
+              <div className="py-8 text-center text-sm text-white/60">
+                لا توجد نتائج مطابقة.
+              </div>
+            ) : (
+              filteredPlayers.map((r) => {
+                const b = r.branchId ? branchMap.get(r.branchId) : undefined;
+                const branchName = b?.name ?? "—";
+                const liveStatus = calcStatusFromEnd(r.end);
+                const sessionsLabel =
+                  r.subscriptionMode === "شهري"
+                    ? "شهري"
+                    : String(remainingSessions(r, b) ?? r.sessions);
+
+                return (
+                  <div
+                    key={r.id}
+                    className="bg-[#111827] rounded-2xl p-4 border border-white/5"
+                  >
+                    {/* Card header: name + status */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                          {r.name}
+                          {r.isLegacy && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/15 text-amber-300">
+                              قديم
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-white/50 mt-0.5">{branchName}</div>
+                      </div>
+                      <span
+                        className={`shrink-0 mr-2 px-3 py-1 rounded-full text-xs ${statusStyles[liveStatus]}`}
+                      >
+                        {liveStatus}
+                      </span>
+                    </div>
+
+                    {/* Card details grid */}
+                    <div className="grid grid-cols-2 gap-y-1.5 text-xs mb-3">
+                      <div>
+                        <span className="text-white/40">سنة الميلاد: </span>
+                        <span className="text-white/80">{r.birth}</span>
+                      </div>
+                      <div>
+                        <span className="text-white/40">الهاتف: </span>
+                        <span className="text-white/80">{r.phone || "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-white/40">الحصص: </span>
+                        <span className="text-white/80">{sessionsLabel}</span>
+                      </div>
+                      <div>
+                        <span className="text-white/40">السعر: </span>
+                        <span className="text-white/80">{r.price} د.ك</span>
+                      </div>
+                      <div>
+                        <span className="text-white/40">البداية: </span>
+                        <span className="text-white/80">{r.start}</span>
+                      </div>
+                      <div>
+                        <span className="text-white/40">الانتهاء: </span>
+                        <span className="text-white/80">{r.end}</span>
+                      </div>
+                    </div>
+
+                    {/* Card actions */}
+                    <div className="flex gap-2 pt-2.5 border-t border-white/5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => openEditModal(r.id)}
+                      >
+                        تعديل
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => openRenewModal(r.id)}
+                      >
+                        تجديد
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* ── Desktop table (hidden on mobile) ─────────────────────────── */}
+          <div className="mt-6 hidden md:block bg-[#111827] rounded-2xl overflow-hidden border border-white/5">
             <div className="bg-[#0F172A] px-6 py-4 text-sm text-white/80 grid grid-cols-[2fr_0.9fr_1.2fr_1.2fr_0.9fr_1fr_1.1fr_1.1fr_0.9fr_1.8fr] gap-4">
               <div>الاسم</div>
               <div>سنة الميلاد</div>
@@ -893,182 +974,184 @@ export default function PlayersPage() {
               )}
             </div>
           </div>
-        )}
+        </>
+      )}
 
-        {/* Modal */}
-        {open && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-            <div className="w-full max-w-xl bg-[#0F172A] border border-white/10 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="font-semibold">
-                  {modalType === "add" && "إضافة لاعب"}
-                  {modalType === "edit" && "تعديل لاعب"}
-                  {modalType === "renew" && "تجديد اشتراك"}
-                </div>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="text-white/70 hover:text-white"
-                  type="button"
-                >
-                  ✕
-                </button>
+      {/* Modal */}
+      {open && (
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="w-full sm:max-w-xl bg-[#0F172A] border border-white/10 rounded-t-2xl sm:rounded-2xl p-5 max-h-[90dvh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-semibold">
+                {modalType === "add" && "إضافة لاعب"}
+                {modalType === "edit" && "تعديل لاعب"}
+                {modalType === "renew" && "تجديد اشتراك"}
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className="text-white/70 hover:text-white"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Save error */}
+            {saveError && (
+              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+                {saveError}
+              </div>
+            )}
+
+            {/* Responsive grid: 1 col on mobile, 2 cols on sm+ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Name */}
+              <div className="col-span-full">
+                <div className="text-xs text-white/70 mb-1">الاسم</div>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
+                  placeholder="اسم اللاعب"
+                />
               </div>
 
-              {/* Save error */}
-              {saveError && (
-                <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
-                  {saveError}
+              {/* Birth */}
+              <div>
+                <div className="text-xs text-white/70 mb-1">سنة الميلاد</div>
+                <input
+                  value={birth}
+                  onChange={(e) => setBirth(e.target.value)}
+                  className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
+                  placeholder="مثال: 2016"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <div className="text-xs text-white/70 mb-1">هاتف ولي الأمر</div>
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
+                  placeholder="مثال: 99999999"
+                />
+              </div>
+
+              {/* Branch */}
+              <div className="col-span-full">
+                <div className="text-xs text-white/70 mb-1">الفرع</div>
+                <select
+                  value={branchId}
+                  onChange={(e) => applyBranchSettings(e.target.value)}
+                  className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
+                  disabled={modalType === "renew"}
+                >
+                  <option value="">اختر الفرع</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Start Date */}
+              <div className="col-span-full">
+                <div className="text-xs text-white/70 mb-1">تاريخ البداية</div>
+                <input
+                  type="text"
+                  value={startDateText}
+                  onChange={(e) => handleStartDateTextChange(e.target.value)}
+                  placeholder="يوم/شهر/سنة  —  مثال: 26/02/2026"
+                  maxLength={10}
+                  className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
+                  dir="ltr"
+                />
+              </div>
+
+              {/* Subscription mode */}
+              <div className="col-span-full">
+                <div className="text-xs text-white/70 mb-1">نوع الاشتراك</div>
+                <div className="flex gap-2">
+                  {(["حصص", "شهري"] as SubscriptionMode[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setSubscriptionMode(m)}
+                      className={[
+                        "h-10 px-4 rounded-xl text-sm border transition",
+                        subscriptionMode === m
+                          ? "bg-white/10 border-white/15"
+                          : "bg-[#0B1220] border-white/10 hover:bg-white/5",
+                      ].join(" ")}
+                      type="button"
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sessions */}
+              {subscriptionMode === "حصص" && (
+                <div>
+                  <div className="text-xs text-white/70 mb-1">عدد الحصص</div>
+                  <input
+                    value={sessionsInput}
+                    onChange={(e) => setSessionsInput(e.target.value)}
+                    className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
+                    placeholder="مثال: 12"
+                  />
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                {/* Name */}
-                <div className="col-span-2">
-                  <div className="text-xs text-white/70 mb-1">الاسم</div>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
-                    placeholder="اسم اللاعب"
-                  />
-                </div>
-
-                {/* Birth */}
-                <div>
-                  <div className="text-xs text-white/70 mb-1">سنة الميلاد</div>
-                  <input
-                    value={birth}
-                    onChange={(e) => setBirth(e.target.value)}
-                    className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
-                    placeholder="مثال: 2016"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <div className="text-xs text-white/70 mb-1">هاتف ولي الأمر</div>
-                  <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
-                    placeholder="مثال: 99999999"
-                  />
-                </div>
-
-                {/* Branch */}
-                <div className="col-span-2">
-                  <div className="text-xs text-white/70 mb-1">الفرع</div>
-                  <select
-                    value={branchId}
-                    onChange={(e) => applyBranchSettings(e.target.value)}
-                    className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
-                    disabled={modalType === "renew"}
-                  >
-                    <option value="">اختر الفرع</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Start Date */}
-                <div className="col-span-2">
-                  <div className="text-xs text-white/70 mb-1">تاريخ البداية</div>
-                  <input
-                    type="text"
-                    value={startDateText}
-                    onChange={(e) => handleStartDateTextChange(e.target.value)}
-                    placeholder="يوم/شهر/سنة  —  مثال: 26/02/2026"
-                    maxLength={10}
-                    className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
-                    dir="ltr"
-                  />
-                </div>
-
-                {/* Subscription mode */}
-                <div className="col-span-2">
-                  <div className="text-xs text-white/70 mb-1">نوع الاشتراك</div>
-                  <div className="flex gap-2">
-                    {(["حصص", "شهري"] as SubscriptionMode[]).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setSubscriptionMode(m)}
-                        className={[
-                          "h-10 px-4 rounded-xl text-sm border transition",
-                          subscriptionMode === m
-                            ? "bg-white/10 border-white/15"
-                            : "bg-[#0B1220] border-white/10 hover:bg-white/5",
-                        ].join(" ")}
-                        type="button"
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Sessions */}
-                {subscriptionMode === "حصص" && (
-                  <div>
-                    <div className="text-xs text-white/70 mb-1">عدد الحصص</div>
-                    <input
-                      value={sessionsInput}
-                      onChange={(e) => setSessionsInput(e.target.value)}
-                      className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
-                      placeholder="مثال: 12"
-                    />
-                  </div>
-                )}
-
-                {/* Price */}
-                <div>
-                  <div className="text-xs text-white/70 mb-1">السعر (د.ك)</div>
-                  <input
-                    value={priceInput}
-                    onChange={(e) => setPriceInput(e.target.value)}
-                    className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
-                    placeholder="مثال: 40"
-                  />
-                </div>
-
-                {/* is_legacy checkbox */}
-                <div className="col-span-2">
-                  <label className="flex items-center gap-3 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={isLegacy}
-                      onChange={(e) => setIsLegacy(e.target.checked)}
-                      className="h-4 w-4 rounded"
-                    />
-                    <span className="text-sm text-white/80">
-                      لاعب قديم
-                      <span className="text-white/40 text-xs mr-2">
-                        (لا يُحتسب في تحليلات اللاعبين الجدد)
-                      </span>
-                    </span>
-                  </label>
-                </div>
-
-                {/* End preview */}
-                <div className="col-span-2 text-xs text-white/70">
-                  تاريخ النهاية المتوقع:{" "}
-                  <span className="text-white">{computeEndPreview()}</span>
-                </div>
+              {/* Price */}
+              <div>
+                <div className="text-xs text-white/70 mb-1">السعر (د.ك)</div>
+                <input
+                  value={priceInput}
+                  onChange={(e) => setPriceInput(e.target.value)}
+                  className="w-full h-11 rounded-xl bg-[#0B1220] border border-white/10 px-4 outline-none"
+                  placeholder="مثال: 40"
+                />
               </div>
 
-              <div className="mt-5 flex items-center justify-between gap-3">
-                <Button variant="secondary" onClick={() => setOpen(false)}>
-                  إلغاء
-                </Button>
-                <Button onClick={savePlayer} disabled={saving}>
-                  {saving ? "جاري الحفظ..." : "حفظ"}
-                </Button>
+              {/* is_legacy checkbox */}
+              <div className="col-span-full">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isLegacy}
+                    onChange={(e) => setIsLegacy(e.target.checked)}
+                    className="h-4 w-4 rounded"
+                  />
+                  <span className="text-sm text-white/80">
+                    لاعب قديم
+                    <span className="text-white/40 text-xs mr-2">
+                      (لا يُحتسب في تحليلات اللاعبين الجدد)
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {/* End preview */}
+              <div className="col-span-full text-xs text-white/70">
+                تاريخ النهاية المتوقع:{" "}
+                <span className="text-white">{computeEndPreview()}</span>
               </div>
             </div>
+
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <Button variant="secondary" onClick={() => setOpen(false)}>
+                إلغاء
+              </Button>
+              <Button onClick={savePlayer} disabled={saving}>
+                {saving ? "جاري الحفظ..." : "حفظ"}
+              </Button>
+            </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
+    </main>
   );
 }
