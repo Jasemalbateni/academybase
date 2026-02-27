@@ -1,0 +1,1023 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { listPlayers, type DbPlayer } from "@/src/lib/supabase/players";
+import { listBranches, type DbBranch } from "@/src/lib/supabase/branches";
+import {
+  listAttendanceByMonth,
+  upsertAttendance,
+} from "@/src/lib/supabase/attendance";
+import { listPaymentPeriods, type PaymentPeriod } from "@/src/lib/supabase/payments";
+import { createClient } from "@/lib/supabase/browser";
+
+// ── Error helper ──────────────────────────────────────────────────────────────
+
+function formatError(e: unknown): string {
+  if (!e) return "خطأ غير محدد";
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object") {
+    const pg = e as Record<string, unknown>;
+    const parts: string[] = [];
+    if (pg.message) parts.push(`message: ${pg.message}`);
+    if (pg.code)    parts.push(`code: ${pg.code}`);
+    if (pg.details) parts.push(`details: ${pg.details}`);
+    return parts.length ? parts.join(" | ") : JSON.stringify(e);
+  }
+  return String(e);
+}
+
+// ── Arabic day mapping ────────────────────────────────────────────────────────
+// JavaScript getDay(): 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
+
+const JS_DAY_TO_ARABIC: Record<number, string> = {
+  0: "الأحد", 1: "الاثنين", 2: "الثلاثاء",
+  3: "الأربعاء", 4: "الخميس", 5: "الجمعة", 6: "السبت",
+};
+
+const DAY_SHORT: Record<string, string> = {
+  "الأحد":    "أحد",  "الاثنين":  "اثن",  "الثلاثاء": "ثلا",
+  "الأربعاء": "أرب",  "الخميس":   "خمي",  "الجمعة":   "جمع",  "السبت":    "سبت",
+};
+
+// Arabic day name → JS getDay() number (for session-end computation)
+const ARABIC_DAY_TO_JS: Record<string, number> = {
+  "الأحد": 0, "الاثنين": 1, "الثلاثاء": 2,
+  "الأربعاء": 3, "الخميس": 4, "الجمعة": 5, "السبت": 6,
+};
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function currentMonthKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Local-timezone ISO date — avoids UTC day-shift on UTC+ systems. */
+function toISODate(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, "0");
+  const dd   = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** All dates in the given month whose weekday matches the branch training days. */
+function getSessionDates(year: number, month: number, branchDays: string[]): Date[] {
+  const dates: Date[] = [];
+  const daysInMonth = new Date(year, month, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month - 1, day);
+    if (branchDays.includes(JS_DAY_TO_ARABIC[d.getDay()])) dates.push(d);
+  }
+  return dates;
+}
+
+// ── Subscription period end-date computation (for legacy NULL-end rows) ───────
+//
+// Payments inserted before migration 16 have subscription_end = NULL.
+// We fall back to computing the end from the player's current subscription
+// settings — an approximation that works well when settings haven't changed.
+
+/** Last inclusive day of a 1-calendar-month subscription starting on startISO. */
+function computeMonthlyEndISO(startISO: string): string {
+  const [y, m, d] = startISO.split("-").map(Number);
+  // Same day in the next calendar month, clamped to that month's last day
+  const nextFirst   = new Date(y, m, 1);                          // 1st of next month
+  const lastOfNext  = new Date(nextFirst.getFullYear(), nextFirst.getMonth() + 1, 0).getDate();
+  const dayOfMonth  = Math.min(d, lastOfNext);
+  const sameNextDay = new Date(nextFirst.getFullYear(), nextFirst.getMonth(), dayOfMonth);
+  // End = one day before "same day next month" (i.e. last inclusive day)
+  sameNextDay.setDate(sameNextDay.getDate() - 1);
+  return toISODate(sameNextDay);
+}
+
+/**
+ * Last inclusive day of a sessions-based subscription: the date on which the
+ * Nth training session falls, counting from startISO. Returns null if the
+ * branch has no training days configured or the limit isn't reached in 1 year.
+ */
+function computeSessionsEndISO(
+  startISO:  string,
+  branchDays: string[],
+  sessions:  number,
+): string | null {
+  const [y, m, d] = startISO.split("-").map(Number);
+  const dayNums   = new Set(
+    branchDays.map((name) => ARABIC_DAY_TO_JS[name]).filter((n) => n !== undefined)
+  );
+  if (dayNums.size === 0 || !Number.isFinite(sessions) || sessions <= 0) return null;
+
+  let count  = 0;
+  const cursor = new Date(y, m - 1, d);
+  for (let i = 0; i < 365; i++) {
+    if (dayNums.has(cursor.getDay())) {
+      count += 1;
+      if (count === sessions) return toISODate(cursor);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return null;
+}
+
+// ── Subscription state per date ───────────────────────────────────────────────
+
+/**
+ * A resolved subscription period with a definite start and (possibly open) end.
+ * Built from payment rows, with legacy NULL-end rows filled in via computation.
+ */
+type SubscriptionPeriod = {
+  start: string;        // ISO YYYY-MM-DD
+  end:   string | null; // ISO YYYY-MM-DD — null = open-ended (no expiry)
+};
+
+/**
+ * Three-way state for each session date × player:
+ *
+ *  "not_subscribed" — before the player's very first payment.  Label: "غير مشترك"
+ *  "active"         — inside ANY subscription period.           Editable checkbox.
+ *  "expired"        — after first payment but in a gap between  Label: "منتهي الاشتراك"
+ *                     periods, or after the last period ended.
+ *
+ * Using ALL periods (not just the latest one) is what makes this correct after
+ * multiple renewals: Feb 1–14 remains active even though the player renewed on
+ * Feb 20 (player.start_date was overwritten with Feb 20, but the Feb 1–14
+ * window is still covered by the first payment's period).
+ */
+export type DateState = "active" | "not_subscribed" | "expired";
+
+function getDateState(
+  dateISO: string,
+  periods: SubscriptionPeriod[],  // sorted by start ascending
+): DateState {
+  if (periods.length === 0) return "not_subscribed";
+
+  // Before the very first subscription
+  if (dateISO < periods[0].start) return "not_subscribed";
+
+  // Check every period — active if covered by ANY window
+  for (const p of periods) {
+    if (dateISO >= p.start && (!p.end || dateISO <= p.end)) return "active";
+  }
+
+  // After first subscription but not inside any window → gap or final expiry
+  return "expired";
+}
+
+/**
+ * Returns true if ANY of the player's subscription periods overlaps with the
+ * given month. Used to hide players entirely in months where they have no
+ * active days at all.
+ */
+function isActiveInMonth(
+  periods:       SubscriptionPeriod[],
+  selectedMonth: string,
+): boolean {
+  if (periods.length === 0) return false;
+
+  const [year, month] = selectedMonth.split("-").map(Number);
+  const firstDayISO   = `${selectedMonth}-01`;
+  const lastDay       = new Date(year, month, 0).getDate();
+  const lastDayISO    = `${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
+
+  for (const p of periods) {
+    if (p.start > lastDayISO)           continue; // period starts after month
+    if (p.end && p.end < firstDayISO)   continue; // period ended before month
+    return true;
+  }
+  return false;
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Player = {
+  id:               string;
+  name:             string;
+  phone:            string;
+  branchId:         string | null;
+  subscriptionMode: string;   // "شهري" | "حصص"
+  sessions:         number;   // used for legacy NULL-end fallback computation
+  startDate:        string;   // ISO — current subscription start
+  endDate:          string | null; // ISO — current subscription end (or null)
+};
+
+type BranchLite = {
+  id:   string;
+  name: string;
+  days: string[];
+};
+
+type DateEntry = {
+  date:  Date;
+  iso:   string;
+  state: DateState;
+};
+
+type AttendanceMap = Map<string, boolean>; // "playerId-YYYY-MM-DD" → present
+
+function attKey(playerId: string, isoDate: string): string {
+  return `${playerId}-${isoDate}`;
+}
+
+function dbToPlayer(db: DbPlayer): Player {
+  return {
+    id:               db.id,
+    name:             db.name,
+    phone:            db.phone,
+    branchId:         db.branch_id,
+    subscriptionMode: db.subscription_mode,
+    sessions:         db.sessions,
+    startDate:        db.start_date,
+    endDate:          db.end_date,
+  };
+}
+
+function dbToBranch(db: DbBranch): BranchLite {
+  return { id: db.id, name: db.name, days: db.days };
+}
+
+// ── Period map builder ────────────────────────────────────────────────────────
+//
+// Converts raw PaymentPeriod rows into resolved SubscriptionPeriod[] per player.
+// For legacy rows (subscription_end = NULL) the end is filled in via computation.
+
+function buildPeriodsMap(
+  rawPeriods:  PaymentPeriod[],
+  players:     Player[],
+  branchMap:   Map<string, BranchLite>,
+): Map<string, SubscriptionPeriod[]> {
+  const playerMap = new Map(players.map((p) => [p.id, p]));
+
+  // Group by player, maintaining ascending-date order (guaranteed by query ORDER BY)
+  const byPlayer = new Map<string, PaymentPeriod[]>();
+  for (const row of rawPeriods) {
+    if (!byPlayer.has(row.player_id)) byPlayer.set(row.player_id, []);
+    byPlayer.get(row.player_id)!.push(row);
+  }
+
+  const result = new Map<string, SubscriptionPeriod[]>();
+
+  for (const [playerId, rows] of byPlayer) {
+    const player = playerMap.get(playerId);
+    const branch = player?.branchId ? branchMap.get(player.branchId) : undefined;
+
+    const periods: SubscriptionPeriod[] = rows.map((row, idx) => {
+      // subscription_end already stored (migration 16+)
+      if (row.end !== null) return { start: row.start, end: row.end };
+
+      // ── Legacy row: compute the end date as best-effort ──────────────────
+      const isLast = idx === rows.length - 1;
+
+      if (isLast && player?.endDate) {
+        // Latest payment → player.end_date is always the current subscription end
+        return { start: row.start, end: player.endDate };
+      }
+
+      if (player) {
+        if (player.subscriptionMode === "شهري") {
+          return { start: row.start, end: computeMonthlyEndISO(row.start) };
+        }
+        if (player.subscriptionMode === "حصص" && branch?.days?.length && player.sessions > 0) {
+          const end = computeSessionsEndISO(row.start, branch.days, player.sessions);
+          return { start: row.start, end };
+        }
+      }
+
+      // No branch / mode info — treat as open-ended (conservative: mark active)
+      return { start: row.start, end: null };
+    });
+
+    result.set(playerId, periods);
+  }
+
+  return result;
+}
+
+// ── Arabic month display ──────────────────────────────────────────────────────
+
+const ARABIC_MONTHS = [
+  "يناير", "فبراير", "مارس",   "أبريل", "مايو",   "يونيو",
+  "يوليو", "أغسطس", "سبتمبر", "أكتوبر","نوفمبر", "ديسمبر",
+];
+
+function formatMonthArabic(yyyyMM: string): string {
+  const [yyyy, mm] = yyyyMM.split("-").map(Number);
+  return `${ARABIC_MONTHS[mm - 1]} ${yyyy}`;
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function AttendancePage() {
+  const [selectedMonth,    setSelectedMonth]    = useState<string>(currentMonthKey);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+
+  const [players,       setPlayers]       = useState<Player[]>([]);
+  const [branches,      setBranches]      = useState<BranchLite[]>([]);
+  const [paymentRaws,   setPaymentRaws]   = useState<PaymentPeriod[]>([]);
+  const [attendanceMap, setAttendanceMap] = useState<AttendanceMap>(new Map());
+  const [academyName,   setAcademyName]   = useState<string>("");
+  const [printMode,        setPrintMode]        = useState<"monthly" | "weekly" | "custom">("monthly");
+  const [printWeekIdx,     setPrintWeekIdx]     = useState<number>(0);
+  const [printCustomStart, setPrintCustomStart] = useState<string>("");
+  const [printCustomEnd,   setPrintCustomEnd]   = useState<string>("");
+
+  const [loading,   setLoading]   = useState(true);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // ── Load ────────────────────────────────────────────────────────────────────
+
+  const loadAll = useCallback(async (month: string) => {
+    setLoading(true);
+    setPageError(null);
+    try {
+      const [dbPlayers, dbBranches, dbAttendance, periods] = await Promise.all([
+        listPlayers(),
+        listBranches(),
+        listAttendanceByMonth(month),
+        listPaymentPeriods(),
+      ]);
+
+      setPlayers(dbPlayers.map(dbToPlayer));
+      setBranches(dbBranches.map(dbToBranch));
+      setPaymentRaws(periods);
+
+      const map: AttendanceMap = new Map();
+      for (const rec of dbAttendance) {
+        map.set(attKey(rec.player_id, rec.date), rec.present);
+      }
+      setAttendanceMap(map);
+    } catch (e) {
+      console.error("[attendance] load error:", e);
+      setPageError(formatError(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAll(selectedMonth);
+  }, [selectedMonth, loadAll]);
+
+  // Fetch academy name once for the print header
+  useEffect(() => {
+    const supabase = createClient();
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("academy_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (!profile?.academy_id) return;
+      const { data: academy } = await supabase
+        .from("academies")
+        .select("name")
+        .eq("id", profile.academy_id)
+        .single();
+      if (academy?.name) setAcademyName(academy.name);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Derived ─────────────────────────────────────────────────────────────────
+
+  const branchMap = useMemo(() => {
+    const m = new Map<string, BranchLite>();
+    branches.forEach((b) => m.set(b.id, b));
+    return m;
+  }, [branches]);
+
+  const [year, month] = useMemo(
+    () => selectedMonth.split("-").map(Number) as [number, number],
+    [selectedMonth]
+  );
+
+  /**
+   * Resolved subscription periods per player, built from payment history.
+   * For legacy payments (subscription_end = NULL), end dates are computed
+   * from the player's current subscription settings as a best-effort fallback.
+   */
+  const periodsMap = useMemo(
+    () => buildPeriodsMap(paymentRaws, players, branchMap),
+    [paymentRaws, players, branchMap]
+  );
+
+  /**
+   * Only show players with at least one session date active in the selected
+   * month, determined by checking ALL their subscription periods.
+   */
+  const activePlayers = useMemo(
+    () => players.filter((p) => isActiveInMonth(periodsMap.get(p.id) ?? [], selectedMonth)),
+    [players, periodsMap, selectedMonth]
+  );
+
+  const filteredPlayers = useMemo(() => {
+    if (selectedBranchId === "all") return activePlayers;
+    return activePlayers.filter((p) => p.branchId === selectedBranchId);
+  }, [activePlayers, selectedBranchId]);
+
+  // ── Print data ──────────────────────────────────────────────────────────────
+
+  /** Union of all session dates across filtered players' branches, sorted. */
+  const printSessionDates = useMemo(() => {
+    const dates = new Set<string>();
+    for (const player of filteredPlayers) {
+      const branch = player.branchId ? branchMap.get(player.branchId) : null;
+      if (!branch) continue;
+      for (const d of getSessionDates(year, month, branch.days)) {
+        dates.add(toISODate(d));
+      }
+    }
+    return Array.from(dates).sort();
+  }, [filteredPlayers, branchMap, year, month]);
+
+  /** Session date groups by week (days 1-7, 8-14, 15-21, 22-28, 29+). */
+  const weeksInMonth = useMemo(() => {
+    const chunks: [number, number][] = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 31]];
+    const lastDay = new Date(year, month, 0).getDate();
+    const groups: { label: string; dates: string[] }[] = [];
+    for (const [start, end] of chunks) {
+      const dates = printSessionDates.filter((iso) => {
+        const day = Number(iso.slice(8, 10));
+        return day >= start && day <= end;
+      });
+      if (dates.length > 0) {
+        groups.push({ label: `${start}–${Math.min(end, lastDay)}`, dates });
+      }
+    }
+    return groups;
+  }, [printSessionDates, year, month]);
+
+  /** Dates to show in the print sheet — full month, selected week, or custom range. */
+  const printSessionDatesFinal = useMemo(() => {
+    if (printMode === "monthly") return printSessionDates;
+    if (printMode === "weekly")  return weeksInMonth[printWeekIdx]?.dates ?? printSessionDates;
+    // custom
+    if (!printCustomStart || !printCustomEnd) return printSessionDates;
+    return printSessionDates.filter(
+      (iso) => iso >= printCustomStart && iso <= printCustomEnd
+    );
+  }, [printMode, printSessionDates, weeksInMonth, printWeekIdx, printCustomStart, printCustomEnd]);
+
+  /** Player × session date matrix with symbols: ✓ ✕ ○ (blank = not_subscribed). */
+  const printData = useMemo(() => {
+    return filteredPlayers
+      .map((player) => {
+        const periods = periodsMap.get(player.id) ?? [];
+        const symbols = printSessionDatesFinal.map((iso) => {
+          const state = getDateState(iso, periods);
+          if (state === "not_subscribed") return "";
+          if (state === "expired") return "○";
+          return (attendanceMap.get(attKey(player.id, iso)) ?? false) ? "✓" : "✕";
+        });
+        const branch = player.branchId ? (branchMap.get(player.branchId)?.name ?? "—") : "—";
+        return { player, branch, symbols };
+      })
+      .filter(({ symbols }) => {
+        if (printMode === "monthly") return true; // show all in monthly view
+        // For weekly/custom: hide players with no active sessions in the range
+        return symbols.some((s) => s === "✓" || s === "✕");
+      });
+  }, [filteredPlayers, periodsMap, printSessionDatesFinal, attendanceMap, branchMap, printMode]);
+
+  // ── Toggle attendance ───────────────────────────────────────────────────────
+
+  const toggleAttendance = useCallback(
+    async (player: Player, isoDate: string) => {
+      const key     = attKey(player.id, isoDate);
+      const current = attendanceMap.get(key) ?? false;
+      const next    = !current;
+
+      setAttendanceMap((prev) => new Map(prev).set(key, next));
+      setSavingKey(key);
+      setSaveError(null);
+
+      try {
+        await upsertAttendance(player.id, player.branchId, isoDate, next);
+      } catch (e) {
+        setAttendanceMap((prev) => new Map(prev).set(key, current));
+        setSaveError(formatError(e));
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [attendanceMap]
+  );
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <main className="flex-1 p-4 md:p-6" dir="rtl">
+
+      {/* Page header */}
+      <div className="flex flex-col gap-2 mb-5">
+        <h1 className="text-2xl font-semibold">سجل الحضور</h1>
+        <p className="text-sm text-white/60">
+          سجّل حضور اللاعبين لكل جلسة تدريبية في الشهر.
+        </p>
+      </div>
+
+      {/* Error banners */}
+      {pageError && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {pageError}
+          <button
+            type="button"
+            onClick={() => loadAll(selectedMonth)}
+            className="mr-3 underline hover:text-red-200"
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      )}
+      {saveError && (
+        <div className="mb-4 rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm text-orange-300">
+          خطأ في الحفظ: {saveError}
+        </div>
+      )}
+
+      {/* Controls bar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-white/60 shrink-0">الشهر:</span>
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => { if (e.target.value) setSelectedMonth(e.target.value); }}
+            className="h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-emerald-400/60 [color-scheme:dark]"
+          />
+          <span className="text-sm font-medium text-emerald-300">
+            {formatMonthArabic(selectedMonth)}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {!loading && (
+            <span className="text-xs text-white/40">
+              {filteredPlayers.length} لاعب نشط هذا الشهر
+            </span>
+          )}
+          {!loading && filteredPlayers.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {/* Mode toggle */}
+              <div className="flex rounded-lg overflow-hidden border border-white/10 text-xs">
+                {(["monthly", "weekly", "custom"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setPrintMode(m);
+                      setPrintWeekIdx(0);
+                      if (m === "custom") {
+                        const [y, mo] = selectedMonth.split("-").map(Number);
+                        const lastDay = new Date(y, mo, 0).getDate();
+                        if (!printCustomStart) setPrintCustomStart(`${selectedMonth}-01`);
+                        if (!printCustomEnd)   setPrintCustomEnd(`${selectedMonth}-${String(lastDay).padStart(2, "0")}`);
+                      }
+                    }}
+                    className={`px-3 py-1.5 transition ${printMode === m ? "bg-white/15 text-white" : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"}`}
+                  >
+                    {m === "monthly" ? "شهري" : m === "weekly" ? "أسبوعي" : "مخصص"}
+                  </button>
+                ))}
+              </div>
+              {/* Custom date pickers (only in custom mode) */}
+              {printMode === "custom" && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="date"
+                    value={printCustomStart}
+                    onChange={(e) => setPrintCustomStart(e.target.value)}
+                    className="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white outline-none focus:border-emerald-400/60 [color-scheme:dark]"
+                  />
+                  <span className="text-white/40">—</span>
+                  <input
+                    type="date"
+                    value={printCustomEnd}
+                    onChange={(e) => setPrintCustomEnd(e.target.value)}
+                    className="h-7 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white outline-none focus:border-emerald-400/60 [color-scheme:dark]"
+                  />
+                </div>
+              )}
+              {/* Week chips (only in weekly mode) */}
+              {printMode === "weekly" && weeksInMonth.map((w, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPrintWeekIdx(i)}
+                  className={`px-2.5 py-1 rounded-full text-xs transition border ${printWeekIdx === i ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"}`}
+                >
+                  {w.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:bg-white/10 hover:text-white transition"
+              >
+                🖨 طباعة الكشف
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Branch filter tabs */}
+      {branches.length > 0 && (
+        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          <BranchTab
+            label="جميع الفروع"
+            active={selectedBranchId === "all"}
+            onClick={() => setSelectedBranchId("all")}
+          />
+          {branches.map((b) => (
+            <BranchTab
+              key={b.id}
+              label={b.name}
+              active={selectedBranchId === b.id}
+              onClick={() => setSelectedBranchId(b.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Player cards */}
+      {loading ? (
+        <div className="flex justify-center py-16 text-white/40 text-sm">جاري التحميل…</div>
+      ) : filteredPlayers.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-white/40 text-sm gap-2">
+          <span className="text-3xl">👥</span>
+          <span>لا يوجد لاعبون نشطون في هذا الشهر.</span>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredPlayers.map((player) => {
+            const branch       = player.branchId ? (branchMap.get(player.branchId) ?? null) : null;
+            const sessionDates = branch ? getSessionDates(year, month, branch.days) : [];
+            const periods      = periodsMap.get(player.id) ?? [];
+
+            const dateEntries: DateEntry[] = sessionDates.map((d) => {
+              const iso = toISODate(d);
+              return { date: d, iso, state: getDateState(iso, periods) };
+            });
+
+            const presentCount = dateEntries.filter(
+              ({ state, iso }) =>
+                state === "active" && attendanceMap.get(attKey(player.id, iso)) === true
+            ).length;
+
+            const totalActive = dateEntries.filter(({ state }) => state === "active").length;
+            const pct = totalActive > 0 ? Math.round((presentCount / totalActive) * 100) : 0;
+
+            return (
+              <PlayerCard
+                key={player.id}
+                player={player}
+                branch={branch}
+                dateEntries={dateEntries}
+                attendanceMap={attendanceMap}
+                savingKey={savingKey}
+                presentCount={presentCount}
+                totalActive={totalActive}
+                pct={pct}
+                onToggle={toggleAttendance}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Printable attendance sheet ──────────────────────────────────────── */}
+      {/* Hidden on screen via @media screen; visible in print via @media print.  */}
+      {/* IMPORTANT: must NOT have display:none inline — visibility:visible cannot */}
+      {/* override an inline display:none. Use @media screen rule instead.        */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media screen {
+          #attendance-print-sheet { display: none; }
+        }
+        @media print {
+          @page { size: A4 landscape; margin: 1.5cm; }
+          body * { visibility: hidden; }
+          #attendance-print-sheet,
+          #attendance-print-sheet * { visibility: visible; }
+          #attendance-print-sheet {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            direction: rtl;
+            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+            background: white !important;
+            color: black !important;
+            padding: 0; margin: 0; overflow: visible;
+          }
+          table { width: 100%; border-collapse: collapse; }
+          thead { display: table-header-group; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          td, th {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      ` }} />
+      <div id="attendance-print-sheet">
+        <div style={{ marginBottom: "16px", borderBottom: "2px solid #333", paddingBottom: "10px" }}>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "#111" }}>
+            {academyName || "الأكاديمية"} &mdash; كشف الحضور
+          </div>
+          <div style={{ display: "flex", gap: "16px", marginTop: "5px", fontSize: "13px", color: "#444" }}>
+            <span>
+              <strong>{ARABIC_MONTHS[Number(selectedMonth.slice(5, 7)) - 1]}</strong>
+              {" "}{selectedMonth.slice(0, 4)}
+              {printMode === "weekly" && weeksInMonth[printWeekIdx] && (
+                <span style={{ marginRight: "6px", color: "#666" }}>
+                  (الأيام {weeksInMonth[printWeekIdx].label})
+                </span>
+              )}
+              {printMode === "custom" && printCustomStart && (
+                <span style={{ marginRight: "6px", color: "#666" }}>
+                  ({printCustomStart} — {printCustomEnd})
+                </span>
+              )}
+            </span>
+            {selectedBranchId !== "all" && (
+              <span>الفرع: <strong>{branches.find((b) => b.id === selectedBranchId)?.name ?? ""}</strong></span>
+            )}
+            <span>عدد اللاعبين: <strong>{printData.length}</strong></span>
+          </div>
+        </div>
+
+        {printSessionDatesFinal.length > 0 && printData.length > 0 ? (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+            <thead>
+              <tr style={{ background: "#f3f4f6" }}>
+                <th style={{ border: "1px solid #ccc", padding: "5px 8px", textAlign: "right", minWidth: "120px" }}>
+                  اللاعب
+                </th>
+                <th style={{ border: "1px solid #ccc", padding: "5px 8px", textAlign: "center", minWidth: "70px" }}>
+                  الفرع
+                </th>
+                {printSessionDatesFinal.map((iso) => {
+                  const day = Number(iso.slice(8, 10));
+                  const [dy, dm] = iso.split("-").map(Number);
+                  const jsDay = new Date(dy, dm - 1, day).getDay();
+                  const dayNames = ["أح","اث","ثل","أر","خم","جم","سب"];
+                  return (
+                    <th
+                      key={iso}
+                      style={{ border: "1px solid #ccc", padding: "4px 3px", textAlign: "center", minWidth: "32px" }}
+                    >
+                      <div>{day}</div>
+                      <div style={{ fontSize: "9px", color: "#666" }}>{dayNames[jsDay]}</div>
+                    </th>
+                  );
+                })}
+                <th style={{ border: "1px solid #ccc", padding: "5px 8px", textAlign: "center", minWidth: "55px" }}>
+                  الحضور
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {printData.map(({ player, branch, symbols }) => {
+                const presentCount = symbols.filter((s) => s === "✓").length;
+                const activeCount  = symbols.filter((s) => s === "✓" || s === "✕").length;
+                return (
+                  <tr key={player.id}>
+                    <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>{player.name}</td>
+                    <td style={{ border: "1px solid #ccc", padding: "4px 6px", textAlign: "center", color: "#555" }}>{branch}</td>
+                    {symbols.map((sym, i) => (
+                      <td
+                        key={i}
+                        style={{
+                          border: "1px solid #ccc",
+                          padding: "4px 2px",
+                          textAlign: "center",
+                          color: sym === "✓" ? "#16a34a" : sym === "✕" ? "#dc2626" : sym === "○" ? "#9ca3af" : "#ccc",
+                          fontWeight: sym === "✓" || sym === "✕" ? "bold" : "normal",
+                        }}
+                      >
+                        {sym || "—"}
+                      </td>
+                    ))}
+                    <td style={{ border: "1px solid #ccc", padding: "4px 6px", textAlign: "center", fontWeight: "600" }}>
+                      {activeCount > 0 ? `${presentCount}/${activeCount}` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <p style={{ color: "#888" }}>لا توجد بيانات للطباعة.</p>
+        )}
+
+        <div style={{ marginTop: "10px", fontSize: "10px", color: "#aaa" }}>
+          ✓ حاضر · ✕ غائب · ○ منتهي الاشتراك · — غير مشترك
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function BranchTab({ label, active, onClick }: {
+  label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "shrink-0 rounded-full px-4 py-1.5 text-sm transition whitespace-nowrap",
+        active
+          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+          : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white",
+      ].join(" ")}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── Player card ───────────────────────────────────────────────────────────────
+
+type PlayerCardProps = {
+  player:        Player;
+  branch:        BranchLite | null;
+  dateEntries:   DateEntry[];
+  attendanceMap: AttendanceMap;
+  savingKey:     string | null;
+  presentCount:  number;
+  totalActive:   number;
+  pct:           number;
+  onToggle:      (player: Player, isoDate: string) => Promise<void>;
+};
+
+function PlayerCard({
+  player, branch, dateEntries, attendanceMap, savingKey, presentCount, totalActive, pct, onToggle,
+}: PlayerCardProps) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white/[0.03]">
+        <div>
+          <div className="font-semibold text-sm">{player.name}</div>
+          <div className="text-xs text-white/50 mt-0.5">
+            {branch ? branch.name : "بدون فرع"}
+            {player.phone ? ` · ${player.phone}` : ""}
+          </div>
+        </div>
+        <SubscriptionBadge endDate={player.endDate} />
+      </div>
+
+      {/* Date chips */}
+      {dateEntries.length === 0 ? (
+        <div className="px-4 py-4 text-xs text-white/30 text-center">
+          {branch ? "لا توجد جلسات هذا الشهر لأيام هذا الفرع" : "لم يتم تعيين فرع"}
+        </div>
+      ) : (
+        <div className="px-3 pt-3 pb-1 overflow-x-auto">
+          <div className="flex gap-2 pb-2" style={{ minWidth: "max-content" }}>
+            {dateEntries.map(({ date, iso, state }) => {
+              const key      = attKey(player.id, iso);
+              const present  = attendanceMap.get(key) ?? false;
+              const isSaving = savingKey === key;
+              const dayName  = JS_DAY_TO_ARABIC[date.getDay()];
+              return (
+                <DateChip
+                  key={iso}
+                  dayShort={DAY_SHORT[dayName] ?? dayName.slice(0, 3)}
+                  dayNum={date.getDate()}
+                  state={state}
+                  present={present}
+                  isSaving={isSaving}
+                  onToggle={() => state === "active" && onToggle(player, iso)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      {totalActive > 0 && (
+        <div className="px-4 py-2.5 border-t border-white/5 flex items-center justify-between">
+          <span className="text-xs text-white/50">الحضور: {presentCount}/{totalActive}</span>
+          <AttendanceBar pct={pct} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Date chip — three states ───────────────────────────────────────────────────
+
+type DateChipProps = {
+  dayShort: string;
+  dayNum:   number;
+  state:    DateState;
+  present:  boolean;
+  isSaving: boolean;
+  onToggle: () => void;
+};
+
+function DateChip({ dayShort, dayNum, state, present, isSaving, onToggle }: DateChipProps) {
+
+  if (state === "not_subscribed") {
+    return (
+      <div className="flex flex-col items-center gap-1 min-w-[52px] rounded-xl border border-white/5 bg-transparent px-2 py-2 opacity-30 select-none">
+        <span className="text-[10px] text-white/50 font-medium">{dayShort}</span>
+        <span className="text-sm font-bold text-white/40">{dayNum}</span>
+        <span className="text-[9px] text-white/40 font-medium leading-tight text-center">
+          غير<br />مشترك
+        </span>
+      </div>
+    );
+  }
+
+  if (state === "expired") {
+    return (
+      <div className="flex flex-col items-center gap-1 min-w-[52px] rounded-xl border border-red-500/20 bg-red-500/5 px-2 py-2 select-none">
+        <span className="text-[10px] text-white/30 font-medium">{dayShort}</span>
+        <span className="text-sm font-bold text-white/30">{dayNum}</span>
+        <span className="text-[9px] text-red-400/70 font-medium leading-tight text-center">
+          منتهي<br />الاشتراك
+        </span>
+      </div>
+    );
+  }
+
+  // "active" → interactive checkbox
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={isSaving}
+      aria-label={`${dayShort} ${dayNum}: ${present ? "حاضر" : "غائب"}`}
+      className={[
+        "flex flex-col items-center gap-1 min-w-[52px] rounded-xl border px-2 py-2 transition",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
+        isSaving
+          ? "opacity-50 cursor-wait border-white/10 bg-white/5"
+          : present
+          ? "border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95"
+          : "border-white/10 bg-white/5 hover:bg-white/10 active:scale-95",
+      ].join(" ")}
+    >
+      <span className={["text-[10px] font-medium", present ? "text-emerald-300" : "text-white/40"].join(" ")}>
+        {dayShort}
+      </span>
+      <span className={["text-sm font-bold", present ? "text-white" : "text-white/60"].join(" ")}>
+        {dayNum}
+      </span>
+      <span
+        className={[
+          "w-4 h-4 rounded-full border flex items-center justify-center transition",
+          isSaving ? "border-white/20"
+            : present ? "border-emerald-400 bg-emerald-500"
+            : "border-white/20 bg-transparent",
+        ].join(" ")}
+      >
+        {present && (
+          <svg viewBox="0 0 10 8" className="w-2.5 h-2 fill-current text-white">
+            <path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.5" fill="none"
+              strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+    </button>
+  );
+}
+
+// ── Subscription status badge ─────────────────────────────────────────────────
+
+function SubscriptionBadge({ endDate }: { endDate: string | null }) {
+  if (!endDate) {
+    return <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">نشط</span>;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [yyyy, mm, dd] = endDate.split("-").map(Number);
+  const end = new Date(yyyy, mm - 1, dd);
+  const diffDays = Math.ceil((end.getTime() - today.getTime()) / 86400000);
+
+  if (diffDays < 0)  return <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-300">منتهي</span>;
+  if (diffDays <= 7) return <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">ينتهي قريباً</span>;
+  return <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">نشط</span>;
+}
+
+// ── Attendance bar ────────────────────────────────────────────────────────────
+
+function AttendanceBar({ pct }: { pct: number }) {
+  const color = pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+  const text  = pct >= 80 ? "text-emerald-400" : pct >= 50 ? "text-amber-400" : "text-red-400";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`text-xs font-medium ${text}`}>{pct}%</span>
+    </div>
+  );
+}

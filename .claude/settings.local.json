@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ide__getDiagnostics",
+      "Bash(grep:*)",
+      "Bash(done)",
+      "Bash(cd:*)",
+      "Bash(ls -lh /c/Users/asus/academybase/supabase/*.sql)",
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}
