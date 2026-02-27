@@ -1,4 +1,5 @@
 import { createClient } from "./browser";
+import { resolveAcademyId } from "./academyId";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -24,10 +25,14 @@ export type MembershipInfo = {
 /**
  * Returns full membership info for the current browser-session user.
  * Falls back to the most restrictive role when no session or no membership row.
+ *
+ * Uses resolveAcademyId() so the profiles round-trip is shared with all other
+ * lib functions that call it concurrently — only one DB query fires per session.
  */
 export async function getMembership(): Promise<MembershipInfo> {
   const supabase = createClient();
 
+  // getSession() reads the in-memory/cookie session — no network call.
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -36,13 +41,14 @@ export async function getMembership(): Promise<MembershipInfo> {
     return { role: "admin_staff", hasFinanceAccess: false, branchIds: [] };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("academy_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!profile?.academy_id) {
+  // resolveAcademyId() uses a shared Promise cache — concurrent callers all
+  // share the same in-flight request so only ONE profiles query fires.
+  let academyId: string;
+  try {
+    academyId = await resolveAcademyId();
+  } catch {
+    // No academy linked yet (e.g. invited user still completing setup) →
+    // treat as the most restrictive role.
     return { role: "admin_staff", hasFinanceAccess: false, branchIds: [] };
   }
 
@@ -51,13 +57,13 @@ export async function getMembership(): Promise<MembershipInfo> {
       .from("academy_members")
       .select("role, has_finance_access")
       .eq("user_id", user.id)
-      .eq("academy_id", profile.academy_id)
+      .eq("academy_id", academyId)
       .maybeSingle(),
     supabase
       .from("member_branch_access")
       .select("branch_id")
       .eq("user_id", user.id)
-      .eq("academy_id", profile.academy_id),
+      .eq("academy_id", academyId),
   ]);
 
   // A real DB error (e.g. 42P17 recursion) must surface, not be silently

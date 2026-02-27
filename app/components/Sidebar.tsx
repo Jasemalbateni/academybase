@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import { clearAcademyIdCache } from "@/src/lib/supabase/academyId";
 import { type UserRole, roleLabel } from "@/lib/supabase/roles";
 
 const NavItem = ({
@@ -201,6 +202,7 @@ export default function Sidebar({
         <button
           onClick={async () => {
             await supabase.auth.signOut();
+            clearAcademyIdCache();
             router.push("/login");
             router.refresh();
           }}

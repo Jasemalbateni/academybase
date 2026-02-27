@@ -11,6 +11,25 @@ export type AcademyDiag = {
   resolvedError: string | null;
 };
 
+// ── Session-scoped cache ───────────────────────────────────────────────────────
+//
+// academy_id is immutable once set — a user belongs to exactly one academy for
+// the lifetime of their session. Caching the in-flight Promise means that even
+// when many lib functions call resolveAcademyId() concurrently (e.g. inside a
+// Promise.all), only ONE profiles.select("academy_id") round-trip is issued.
+//
+// Lifecycle:
+//   • Populated on first call within a browser session.
+//   • Shared across all concurrent callers (Promise deduplication).
+//   • Cleared automatically on rejection so the next call retries.
+//   • Call clearAcademyIdCache() on sign-out (Sidebar does this).
+
+let _cache: Promise<string> | undefined;
+
+export function clearAcademyIdCache(): void {
+  _cache = undefined;
+}
+
 // ── Canonical resolution ───────────────────────────────────────────────────────
 //
 // Single source of truth: profiles.academy_id
@@ -20,25 +39,38 @@ export type AcademyDiag = {
 //   If we used academy_members, the chain could become:
 //   branches → academy_members → academies → academy_members → ∞ (stack overflow)
 //
-// Requires RLS policy on profiles:
-//   FOR SELECT USING (user_id = auth.uid())   ← direct, no subqueries
+// Why getSession() instead of getUser()?
+//   getUser() validates the JWT with the Supabase Auth server on every call
+//   (network round-trip). getSession() reads from the in-memory/cookie cache
+//   (free). The middleware already validates the session on every request, so
+//   a local session read is sufficient here.
 
-export async function resolveAcademyId(): Promise<string> {
+export function resolveAcademyId(): Promise<string> {
+  if (!_cache) {
+    _cache = _fetch().catch((e) => {
+      // Clear so the next caller retries instead of seeing a stale rejection.
+      _cache = undefined;
+      throw e;
+    });
+  }
+  return _cache;
+}
+
+async function _fetch(): Promise<string> {
   const supabase = createClient();
 
   const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (authErr || !user) {
+  if (!session?.user) {
     throw new Error("المستخدم غير مسجل الدخول");
   }
 
   const { data, error } = await supabase
     .from("profiles")
     .select("academy_id")
-    .eq("user_id", user.id)
+    .eq("user_id", session.user.id)
     .maybeSingle();
 
   if (error) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getUserRole, type UserRole } from "@/src/lib/supabase/roles";
+import { resolveAcademyId } from "@/src/lib/supabase/academyId";
 
 import {
   ResponsiveContainer,
@@ -319,7 +320,9 @@ export default function DashboardHome() {
       setPageError(null);
 
       try {
-        // 1. Get authenticated user + role in parallel
+        // 1. Auth check + role in parallel.
+        //    getUserRole() → getMembership() → resolveAcademyId() which warms
+        //    the shared academyId Promise-cache used by all lib functions below.
         const [
           { data: { user } },
           role,
@@ -333,27 +336,14 @@ export default function DashboardHome() {
         }
         if (!cancelled) setUserRole(role);
 
-        // 2. Get profile → academy_id
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("academy_id")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        // 2. academyId is now cached from step 1 — this await is a free
+        //    Promise resolution (no DB round-trip).
+        const academyId = await resolveAcademyId();
 
-        if (!profile?.academy_id) {
-          if (!cancelled) setPageError("لا توجد أكاديمية مرتبطة بهذا الحساب.");
-          return;
-        }
-
-        // 3. Get academy name
-        const { data: academy } = await supabase
-          .from("academies")
-          .select("name")
-          .eq("id", profile.academy_id)
-          .single();
-
-        // 4. Load all domain data in parallel (each uses resolveAcademyId internally)
-        const [dbPlayers, dbPayments, dbBranches, dbTx] = await Promise.all([
+        // 3. Academy name + all domain data fire in one parallel batch.
+        //    Each listX() calls resolveAcademyId() internally → cache hit.
+        const [academyRes, dbPlayers, dbPayments, dbBranches, dbTx] = await Promise.all([
+          supabase.from("academies").select("name").eq("id", academyId).single(),
           listPlayers(),
           listPayments(),
           listBranches(),
@@ -362,7 +352,7 @@ export default function DashboardHome() {
 
         if (cancelled) return;
 
-        setAcademyName(academy?.name ?? "");
+        setAcademyName(academyRes.data?.name ?? "");
         setPlayers(dbPlayers.map(dbToPlayer));
         setPayments(dbPayments.map(dbToPayment));
         setBranches(dbBranches.map(dbToBranch));
@@ -457,6 +447,20 @@ export default function DashboardHome() {
   );
 
   /**
+   * Precomputed Map: playerId → YYYY-MM of their earliest payment ever.
+   * Built once when payments change — O(payments). Shared by renewalStats and
+   * renewalChart so neither needs to .filter().sort() per player per month.
+   */
+  const firstPaymentMonthByPlayer = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of payments) {
+      const existing = m.get(p.playerId);
+      if (!existing || p.dateISO < existing) m.set(p.playerId, p.dateISO.slice(0, 7));
+    }
+    return m;
+  }, [payments]);
+
+  /**
    * Renewal rate — player-history-based (correct) logic:
    *
    * For each distinct player who has at least one payment in the selected month:
@@ -479,13 +483,8 @@ export default function DashboardHome() {
     let renewCount = 0;
 
     for (const pid of thisMonthPlayerIds) {
-      // Find the earliest payment for this player across ALL history
-      const allForPlayer = payments
-        .filter((p) => p.playerId === pid)
-        .sort((a, b) => a.dateISO.localeCompare(b.dateISO));
-
-      const firstPaymentMonth = allForPlayer[0]?.dateISO?.slice(0, 7);
-      if (firstPaymentMonth === selectedMonth) {
+      // O(1) Map lookup instead of O(N) .filter().sort() per player
+      if (firstPaymentMonthByPlayer.get(pid) === selectedMonth) {
         newCount++;   // First-ever payment is this month → new subscriber
       } else {
         renewCount++; // Has prior payment history → renewal
@@ -493,7 +492,7 @@ export default function DashboardHome() {
     }
 
     return { newCount, renewCount };
-  }, [payments, monthPayments, selectedMonth]);
+  }, [monthPayments, selectedMonth, firstPaymentMonthByPlayer]);
 
   const { newCount, renewCount } = renewalStats;
 
@@ -540,34 +539,29 @@ export default function DashboardHome() {
   }, [selectedMonth, tx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renewalChart = useMemo(() => {
-    const months = chartData.map((x) => String(x.month));
-    return months.map((ym) => {
-      const ymPayments = payments.filter((p) => p.dateISO?.slice(0, 7) === ym);
+    return chartData.map(({ month: ym }) => {
       // Exclude legacy-import payments from new/renew classification
       const ymPlayerIds = new Set(
-        ymPayments.filter((p) => p.kind !== "legacy").map((p) => p.playerId).filter(Boolean)
+        payments
+          .filter((p) => p.dateISO?.slice(0, 7) === ym && p.kind !== "legacy")
+          .map((p) => p.playerId)
+          .filter(Boolean)
       );
 
       let renew = 0;
       let news = 0;
 
       for (const pid of ymPlayerIds) {
-        const allForPlayer = payments
-          .filter((p) => p.playerId === pid)
-          .sort((a, b) => a.dateISO.localeCompare(b.dateISO));
-        const firstMonth = allForPlayer[0]?.dateISO?.slice(0, 7);
-        if (firstMonth === ym) {
-          news++;
-        } else {
-          renew++;
-        }
+        // O(1) Map lookup — no .filter().sort() per player
+        if (firstPaymentMonthByPlayer.get(pid) === ym) news++;
+        else renew++;
       }
 
       const total = renew + news;
       const rate = total === 0 ? 0 : Math.round((renew / total) * 100);
       return { month: ym, renewalRate: rate, renew, news };
     });
-  }, [payments, chartData]);
+  }, [payments, chartData, firstPaymentMonthByPlayer]);
 
   const academyTitle = academyName ? `أكاديمية "${academyName}" الرياضية` : "أكاديمية";
 
