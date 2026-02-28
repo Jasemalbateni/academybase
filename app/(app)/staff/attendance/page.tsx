@@ -12,6 +12,12 @@ import {
   ATTENDANCE_STATUS_LABELS,
   type AttendanceStatus,
 } from "@/src/lib/supabase/staff-attendance";
+import {
+  upsertStaffSubstitute,
+  listStaffSubstitutes,
+  type DbStaffSubstitute,
+} from "@/src/lib/supabase/staff-substitutes";
+import { upsertAutoFinanceTx } from "@/src/lib/supabase/finance";
 
 // ── Error helper ──────────────────────────────────────────────────────────────
 
@@ -214,6 +220,16 @@ export default function StaffAttendancePage() {
   // Row state: "{staffId}:{branchId}" → RowState
   const [rows, setRows] = useState<Map<string, RowState>>(new Map());
 
+  // Feature E: Substitute coach state
+  const [substitutes, setSubstitutes] = useState<Map<string, DbStaffSubstitute>>(new Map());
+  const [subModal, setSubModal] = useState<{ staffId: string; branchId: string } | null>(null);
+  const [subType, setSubType] = useState<"staff" | "external">("external");
+  const [subStaffId, setSubStaffId] = useState<string>("");
+  const [subName, setSubName] = useState<string>("");
+  const [subAmount, setSubAmount] = useState<number>(0);
+  const [subNote, setSubNote] = useState<string>("");
+  const [subSaving, setSubSaving] = useState(false);
+
   // ── Load branches + staff ─────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
@@ -252,12 +268,23 @@ export default function StaffAttendancePage() {
   // ── Load attendance when date changes ─────────────────────────────────────
 
   useEffect(() => {
-    // Always clear rows on date change (including to null) for a clean state
+    // Always clear rows + substitutes on date change (including to null)
     setRows(new Map());
+    setSubstitutes(new Map());
     setAttError(null);
     if (!selectedDate) return;
 
     let cancelled = false;
+
+    // Load substitutes for the new date (best-effort)
+    listStaffSubstitutes(selectedDate)
+      .then((subs) => {
+        if (cancelled) return;
+        const subMap = new Map<string, DbStaffSubstitute>();
+        for (const s of subs) subMap.set(rowKey(s.staff_id, s.branch_id), s);
+        setSubstitutes(subMap);
+      })
+      .catch(() => {}); // graceful — table may not exist yet
 
     listStaffAttendance(selectedDate)
       .then((records) => {
@@ -363,10 +390,93 @@ export default function StaffAttendancePage() {
 
   // ── Save single slot ──────────────────────────────────────────────────────
 
+  // Feature E: open substitute modal
+  function openSubModal(staffId: string, branchId: string) {
+    const key = rowKey(staffId, branchId);
+    const existing = substitutes.get(key);
+    setSubModal({ staffId, branchId });
+    setSubType(existing?.substitute_staff_id ? "staff" : "external");
+    setSubStaffId(existing?.substitute_staff_id ?? "");
+    setSubName(existing?.substitute_name ?? "");
+    setSubAmount(existing ? Number(existing.payment_amount) : 0);
+    setSubNote(existing?.note ?? "");
+  }
+
+  // Feature E: save substitute
+  async function saveSubstitute() {
+    if (!subModal || !selectedDate) return;
+    const resolvedName =
+      subType === "staff"
+        ? (staff.find((s) => s.id === subStaffId)?.name ?? subName)
+        : subName;
+    if (!resolvedName.trim()) {
+      setSaveError("أدخل اسم البديل أو اختر موظفاً من القائمة.");
+      return;
+    }
+
+    setSubSaving(true);
+    setSaveError(null);
+    try {
+      const month = selectedDate.slice(0, 7);
+      const absentStaff = staff.find((s) => s.id === subModal.staffId);
+      const subBranch   = branches.find((b) => b.id === subModal.branchId);
+
+      const saved = await upsertStaffSubstitute({
+        staff_id:            subModal.staffId,
+        branch_id:           subModal.branchId,
+        date:                selectedDate,
+        substitute_staff_id: subType === "staff" && subStaffId ? subStaffId : null,
+        substitute_name:     resolvedName.trim(),
+        payment_amount:      subAmount,
+        note:                subNote.trim() || null,
+      });
+
+      // Auto-create finance expense (best-effort)
+      if (subAmount > 0) {
+        try {
+          // For existing staff substitutes: use sub_income: auto_key so finance page
+          // groups it as a positive sub-item under that staff member's salary row.
+          // For external substitutes: keep separate expense row.
+          const isStaffSub = subType === "staff" && !!subStaffId;
+          const autoKey = isStaffSub
+            ? `sub_income:${month}:${subStaffId}:${subModal.branchId}:${selectedDate}`
+            : `substitute:${month}:${subModal.staffId}:${subModal.branchId}:${selectedDate}`;
+          await upsertAutoFinanceTx({
+            month,
+            date:     selectedDate,
+            type:     "مصروف",
+            branch_id: subModal.branchId,
+            category: "رواتب",
+            amount:   subAmount,
+            note:     `بديل: ${resolvedName.trim()} عن ${absentStaff?.name ?? ""} — ${subBranch?.name ?? ""}`,
+            source:   "auto",
+            auto_key: autoKey,
+          });
+        } catch { /* non-critical */ }
+      }
+
+      setSubstitutes((prev) =>
+        new Map(prev).set(rowKey(saved.staff_id, saved.branch_id), saved)
+      );
+      setSubModal(null);
+    } catch (e) {
+      setSaveError(formatError(e));
+    } finally {
+      setSubSaving(false);
+    }
+  }
+
   async function saveSlot(staffId: string, branchId: string) {
     if (!selectedDate) return;
     const key = rowKey(staffId, branchId);
     const row = rows.get(key) ?? defaultRow();
+
+    // Feature A: validate deduction amount
+    if (row.deductFromSalary && row.deductionAmount < 0) {
+      setSaveError("مبلغ الخصم لا يمكن أن يكون سالباً");
+      return;
+    }
+
     updateRow(key, { saving: true });
     setSaveError(null);
     try {
@@ -786,6 +896,39 @@ export default function StaffAttendancePage() {
                       className="w-full rounded-xl bg-white/5 border border-white/12 px-3 py-2 text-[11px] text-white placeholder-white/20 outline-none focus:border-emerald-400/50"
                     />
 
+                    {/* Feature E: Substitute coach button */}
+                    {(row.status === "absent" || row.status === "vacation") && (
+                      <div className="w-full">
+                        {substitutes.has(key) ? (
+                          <div className="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-400/20 px-3 py-2 text-xs">
+                            <span className="text-blue-300 font-medium truncate flex-1">
+                              👤 {substitutes.get(key)!.substitute_name}
+                            </span>
+                            {Number(substitutes.get(key)!.payment_amount) > 0 && (
+                              <span className="shrink-0 text-blue-200/60">
+                                {Number(substitutes.get(key)!.payment_amount).toFixed(3)} د.ك
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openSubModal(member.id, branch.id)}
+                              className="shrink-0 text-[10px] text-blue-300/60 hover:text-blue-300"
+                            >
+                              تعديل
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openSubModal(member.id, branch.id)}
+                            className="w-full rounded-xl bg-blue-500/10 border border-blue-400/20 px-3 py-2 text-[11px] text-blue-300 hover:bg-blue-500/20 transition"
+                          >
+                            + تعيين بديل
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {/* Actions */}
                     <div className="flex gap-2 justify-end">
                       <button
@@ -840,6 +983,118 @@ export default function StaffAttendancePage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Feature E: Substitute modal ───────────────────────────────────── */}
+      {subModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm bg-[#111827] border border-white/10 rounded-2xl p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-sm">تعيين بديل</h3>
+              <button
+                type="button"
+                onClick={() => { setSubModal(null); setSaveError(null); }}
+                className="text-white/60 hover:text-white text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Save error */}
+            {saveError && (
+              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {saveError}
+              </div>
+            )}
+
+            {/* Type toggle */}
+            <div className="flex gap-2 mb-4">
+              {(["staff", "external"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setSubType(t); setSubStaffId(""); setSubName(""); }}
+                  className={[
+                    "flex-1 h-9 rounded-xl text-xs border transition",
+                    subType === t
+                      ? "bg-white/10 border-white/20 text-white"
+                      : "bg-[#0F172A] border-white/10 text-white/60 hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  {t === "staff" ? "من الكادر" : "خارجي"}
+                </button>
+              ))}
+            </div>
+
+            {subType === "staff" ? (
+              <div className="mb-3">
+                <div className="text-xs text-white/60 mb-1">الموظف البديل</div>
+                <select
+                  value={subStaffId}
+                  onChange={(e) => setSubStaffId(e.target.value)}
+                  className="w-full h-10 rounded-xl bg-[#0F172A] border border-white/10 px-3 text-sm text-white outline-none"
+                >
+                  <option value="">اختر موظفاً</option>
+                  {staff.filter((s) => s.id !== subModal.staffId).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="mb-3">
+                <div className="text-xs text-white/60 mb-1">اسم البديل</div>
+                <input
+                  value={subName}
+                  onChange={(e) => setSubName(e.target.value)}
+                  className="w-full h-10 rounded-xl bg-[#0F172A] border border-white/10 px-3 text-sm text-white outline-none focus:border-white/25"
+                  placeholder="اسم المدرب البديل"
+                />
+              </div>
+            )}
+
+            <div className="mb-3">
+              <div className="text-xs text-white/60 mb-1">المبلغ (د.ك)</div>
+              <input
+                type="number"
+                min="0"
+                step="0.001"
+                value={subAmount === 0 ? "" : subAmount}
+                onChange={(e) => setSubAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                className="w-full h-10 rounded-xl bg-[#0F172A] border border-white/10 px-3 text-sm text-white outline-none focus:border-white/25"
+                placeholder="0"
+              />
+            </div>
+
+            <div className="mb-5">
+              <div className="text-xs text-white/60 mb-1">ملاحظة (اختياري)</div>
+              <input
+                value={subNote}
+                onChange={(e) => setSubNote(e.target.value)}
+                className="w-full h-10 rounded-xl bg-[#0F172A] border border-white/10 px-3 text-sm text-white outline-none focus:border-white/25"
+                placeholder="..."
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setSubModal(null); setSaveError(null); }}
+                disabled={subSaving}
+                className="flex-1 h-10 rounded-xl bg-white/5 border border-white/10 text-sm text-white/70 hover:bg-white/10 transition disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={saveSubstitute}
+                disabled={subSaving}
+                className="flex-1 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 transition disabled:opacity-50"
+              >
+                {subSaving ? "جاري الحفظ..." : "حفظ"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

@@ -617,7 +617,7 @@ export default function DashboardHome() {
   }
 
   return (
-    <main className="flex-1 p-8">
+    <main className="flex-1 p-4 md:p-8">
           {/* Glow */}
           <div className="pointer-events-none fixed inset-0 -z-10">
             <div className="absolute right-[-200px] top-[-220px] h-[520px] w-[520px] rounded-full bg-emerald-400/10 blur-3xl" />
@@ -654,7 +654,7 @@ export default function DashboardHome() {
             </div>
 
             {/* KPIs */}
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {/* Finance KPIs — owner + admin only */}
               {userRole !== "admin_staff" && (
                 <>
@@ -740,7 +740,7 @@ export default function DashboardHome() {
             </div>
 
             {/* Chart + Branch profit */}
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Card className="lg:col-span-2 p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div>

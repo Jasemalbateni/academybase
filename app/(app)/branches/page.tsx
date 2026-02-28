@@ -265,7 +265,7 @@ export default function BranchesPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <main className="flex-1 p-6">
+    <main className="flex-1 p-4 md:p-8">
 
           {/* ── DEV diagnostic panel ────────────────────────────────────────── */}
           {process.env.NODE_ENV !== "production" && (diag || probe) && (
@@ -438,7 +438,7 @@ export default function BranchesPage() {
           {/* Modal */}
           {open && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-              <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#0e1730] p-5 shadow-xl">
+              <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#0e1730] p-5 shadow-xl max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold">
                     {mode === "create" ? "إضافة فرع" : "تعديل فرع"}

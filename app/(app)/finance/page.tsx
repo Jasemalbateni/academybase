@@ -177,6 +177,8 @@ function prevMonthKey(yyyyMM: string) {
   return new Date(y, m - 2, 1).toISOString().slice(0, 7);
 }
 
+type PrintMode = "main_only" | "with_sub" | "revenues" | "expenses" | "all";
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function FinancePage() {
   const [branches, setBranches] = useState<BranchLite[]>([]);
@@ -193,6 +195,7 @@ export default function FinancePage() {
   const [autoSyncing, setAutoSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
 
   // filters
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -693,23 +696,24 @@ export default function FinancePage() {
 
   // ── Grouped tx views (UI-only grouping — no DB changes) ────────────────────
   const groupedTxViews = useMemo((): GroupedTxView[] => {
-    // Hide session-field: entries — they appear as sub-items under the rent row
+    // Hide session-field: and sub_income: entries — they appear as sub-items under parent rows
     const mainTx = visibleTx.filter(
-      (t) => !t.autoKey?.startsWith("session-field:")
+      (t) => !t.autoKey?.startsWith("session-field:") && !t.autoKey?.startsWith("sub_income:")
     );
 
     return mainTx.map((txItem): GroupedTxView => {
       const subItems: SubItem[] = [];
 
-      // ── salary: → deduction sub-items ──────────────────────────────────────
+      // ── salary: → base + deduction sub-items + staff-substitute income sub-items ────
       if (txItem.autoKey?.startsWith("salary:")) {
         const parts      = txItem.autoKey.split(":");
         const staffId    = parts[2];
         const branchId   = parts[3];
         const staffMember = staff.find((s) => s.id === staffId);
-        const share = staffMember
-          ? Math.round((staffMember.monthlySalary / Math.max(1, staffMember.branchIds.length)) * 100) / 100
-          : txItem.amount;
+        const branchCount = staffMember?.branchIds?.length || 1;
+        const baseSalaryForBranch = staffMember
+          ? Math.round(((staffMember.monthlySalary || 0) / branchCount) * 100) / 100
+          : null;
 
         staffAttendance
           .filter((a) =>
@@ -728,8 +732,30 @@ export default function FinancePage() {
             });
           });
 
-        const totalDeductions = subItems.reduce((s, i) => s + Math.abs(i.amount), 0);
-        return { tx: txItem, subItems, grossAmount: txItem.amount + totalDeductions };
+        // sub_income: entries for this staff member in this month → positive sub-items
+        monthTx
+          .filter((t) => t.autoKey?.startsWith(`sub_income:${txItem.autoKey!.split(":")[1]}:${staffId}:`))
+          .forEach((t) => {
+            subItems.push({
+              id: t.id,
+              date: t.dateISO,
+              label: t.note ?? "مكافأة حضور بديل",
+              amount: t.amount,
+            });
+          });
+
+        const totalAdditions  = subItems.filter((i) => i.amount > 0).reduce((s, i) => s + i.amount, 0);
+        const grossAmount = txItem.amount + totalAdditions;
+        // Prepend base salary sub-item so breakdown reads: base → deductions → substitute additions
+        if (baseSalaryForBranch && baseSalaryForBranch > 0) {
+          subItems.unshift({
+            id: `base-${txItem.id}`,
+            date: txItem.dateISO,
+            label: "الراتب الأساسي",
+            amount: baseSalaryForBranch,
+          });
+        }
+        return { tx: txItem, subItems, grossAmount };
       }
 
       // ── rent: → cancelled session sub-items (per_session only) ─────────────
@@ -990,9 +1016,100 @@ export default function FinancePage() {
     URL.revokeObjectURL(url);
   }
 
+  // ── Print Finance ───────────────────────────────────────────────────────────
+  function printFinance(mode: PrintMode) {
+    const views = groupedTxViews.filter((v) => {
+      if (mode === "revenues") return v.tx.type === "إيراد";
+      if (mode === "expenses") return v.tx.type === "مصروف";
+      return true;
+    });
+
+    const branchLabel = selectedBranch === "all"
+      ? "جميع الفروع"
+      : (branches.find((b) => b.id === selectedBranch)?.name ?? selectedBranch);
+    const [y, m] = selectedMonth.split("-");
+    const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+    const monthLabel = `${ARABIC_MONTHS[Number(m) - 1] ?? m} ${y}`;
+
+    const totalRevenue = views.filter((v) => v.tx.type === "إيراد").reduce((s, v) => s + v.tx.amount, 0);
+    const totalExpense = views.filter((v) => v.tx.type === "مصروف").reduce((s, v) => s + v.tx.amount, 0);
+    const net = totalRevenue - totalExpense;
+
+    const rowsHtml = views.map((v) => {
+      const mainRow = `
+        <tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-weight:600;">${v.tx.note || v.tx.category}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">${v.tx.type}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">${v.tx.category}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">${branchName(v.tx.branchId)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:left;">${v.tx.dateISO}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:left;font-weight:600;color:${v.tx.type === "إيراد" ? "#16a34a" : "#dc2626"};">${v.tx.amount.toLocaleString("ar-KW")} د.ك</td>
+        </tr>`;
+
+      const subRows = (mode === "with_sub" || mode === "all") && v.subItems.length > 0
+        ? v.subItems.map((s) => `
+          <tr style="background:#f9fafb;">
+            <td style="padding:4px 10px 4px 24px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;" colspan="3">↳ ${s.label}</td>
+            <td style="padding:4px 10px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;">${s.date ?? ""}</td>
+            <td></td>
+            <td style="padding:4px 10px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:left;color:${s.amount < 0 ? "#dc2626" : "#16a34a"};">${s.amount > 0 ? "+" : ""}${s.amount.toLocaleString("ar-KW")} د.ك</td>
+          </tr>`).join("")
+        : "";
+
+      return mainRow + subRows;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8"/>
+  <title>الإدارة المالية — ${monthLabel}</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; padding: 24px; direction: rtl; }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #555; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { background: #1e293b; color: #fff; }
+    thead th { padding: 8px 10px; text-align: right; }
+    thead th:last-child { text-align: left; }
+    tbody tr:hover { background: #f8fafc; }
+    .summary { margin-top: 20px; display: flex; gap: 32px; font-size: 14px; }
+    .summary span { font-weight: 600; }
+    .green { color: #16a34a; } .red { color: #dc2626; } .blue { color: #1d4ed8; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <h1>الإدارة المالية</h1>
+  <div class="subtitle">${monthLabel} · ${branchLabel}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>البند</th><th>النوع</th><th>التصنيف</th><th>الفرع</th><th style="text-align:left;">التاريخ</th><th style="text-align:left;">المبلغ</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="summary">
+    <div>إجمالي الإيرادات: <span class="green">${totalRevenue.toLocaleString("ar-KW")} د.ك</span></div>
+    <div>إجمالي المصروفات: <span class="red">${totalExpense.toLocaleString("ar-KW")} د.ك</span></div>
+    <div>صافي الربح: <span class="${net >= 0 ? "green" : "red"}">${net.toLocaleString("ar-KW")} د.ك</span></div>
+  </div>
+</body>
+</html>`;
+
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 300);
+    setPrintOpen(false);
+  }
+
   // ── UI ──────────────────────────────────────────────────────────────────────
   return (
-    <main className="flex-1 p-8">
+    <main className="flex-1 p-4 md:p-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
           <div>
@@ -1007,15 +1124,18 @@ export default function FinancePage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3" style={{ direction: "ltr" }}>
+          <div className="flex items-center gap-2 flex-wrap" style={{ direction: "ltr" }}>
             <Link
               href="/finance/reports"
-              className="h-11 px-5 rounded-xl bg-white/10 hover:bg-white/15 transition font-semibold inline-flex items-center"
+              className="h-9 px-4 rounded-xl bg-white/10 hover:bg-white/15 transition text-sm font-semibold inline-flex items-center"
             >
               التقارير
             </Link>
+            <Button variant="secondary" onClick={() => setPrintOpen(true)} disabled={loading}>
+              طباعة
+            </Button>
             <Button variant="secondary" onClick={exportCSV} disabled={loading}>
-              تصدير CSV
+              CSV
             </Button>
             <Button onClick={openAdd} disabled={loading}>
               + إضافة بند
@@ -1157,7 +1277,9 @@ export default function FinancePage() {
         </div>
 
         {/* Table */}
-        <div className="mt-6 bg-[#111827] rounded-2xl overflow-hidden border border-white/5">
+        <div className="mt-6 bg-[#111827] rounded-2xl border border-white/5">
+          <div className="overflow-x-auto">
+          <div className="min-w-[860px]">
           <div className="bg-[#0F172A] px-6 py-4 text-sm text-white/80 grid grid-cols-[0.9fr_1fr_1.1fr_1fr_1fr_2fr_1.2fr] gap-4">
             <div>التاريخ</div>
             <div>النوع</div>
@@ -1216,9 +1338,9 @@ export default function FinancePage() {
                       <div className="text-white/80">{t.category}</div>
                       {/* Branch */}
                       <div className="text-white/80">{branchName(t.branchId)}</div>
-                      {/* Amount: GROSS when expanded, NET when collapsed */}
+                      {/* Amount: TOTAL (including sub-items) when has sub-items */}
                       <div className="text-white/80">
-                        {hasDetails && isExpanded ? money(grossAmount) : money(t.amount)}
+                        {hasDetails ? money(grossAmount) : money(t.amount)}
                         {hasDetails && !isExpanded && (
                           <div className="text-[10px] text-white/40 mt-0.5">{subItems.length} بند</div>
                         )}
@@ -1256,8 +1378,8 @@ export default function FinancePage() {
                         <div></div>
                         <div></div>
                         <div></div>
-                        <div className="text-white/50 text-xs font-semibold">الصافي</div>
-                        <div className="text-white/90 text-sm font-semibold">{money(t.amount)}</div>
+                        <div className="text-white/50 text-xs font-semibold">الإجمالي</div>
+                        <div className="text-white/90 text-sm font-semibold">{money(grossAmount)}</div>
                         <div></div>
                         <div></div>
                       </div>
@@ -1267,13 +1389,15 @@ export default function FinancePage() {
               })
             )}
           </div>
+          </div>{/* min-w */}
+          </div>{/* overflow-x-auto */}
         </div>
 
         {/* Modal */}
         {open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-[760px] rounded-[28px] bg-[#111827] border border-white/10 shadow-2xl">
-              <div className="px-8 pt-8 flex items-start justify-between">
+            <div className="w-full max-w-[760px] rounded-[28px] bg-[#111827] border border-white/10 shadow-2xl max-h-[92vh] overflow-y-auto">
+              <div className="px-4 sm:px-8 pt-6 sm:pt-8 flex items-start justify-between">
                 <div>
                   <h2 className="text-3xl font-semibold">
                     {editId ? "تعديل بند" : "إضافة بند"}
@@ -1382,6 +1506,45 @@ export default function FinancePage() {
                 <Button onClick={saveTx} disabled={saving}>
                   {saving ? "جاري الحفظ..." : editId ? "حفظ التعديل" : "إضافة"}
                 </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Print dialog */}
+        {printOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-sm rounded-[24px] bg-[#111827] border border-white/10 shadow-2xl p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-semibold">خيارات الطباعة</h2>
+                <button
+                  onClick={() => setPrintOpen(false)}
+                  className="h-9 w-9 rounded-xl bg-white/5 hover:bg-white/10 transition text-xl leading-none"
+                  aria-label="إغلاق"
+                >
+                  ×
+                </button>
+              </div>
+              <p className="text-sm text-white/50 mb-4">
+                سيتم طباعة البنود المرشّحة حالياً ({groupedTxViews.length} بند).
+              </p>
+              <div className="space-y-2">
+                {([
+                  { mode: "main_only",  label: "أ — البنود الرئيسية فقط" },
+                  { mode: "with_sub",   label: "ب — البنود الرئيسية مع التفاصيل" },
+                  { mode: "revenues",   label: "ج — الإيرادات فقط" },
+                  { mode: "expenses",   label: "د — المصروفات فقط" },
+                  { mode: "all",        label: "هـ — الكل مع التفاصيل" },
+                ] as { mode: "main_only" | "with_sub" | "revenues" | "expenses" | "all"; label: string }[]).map(({ mode, label }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => printFinance(mode)}
+                    className="w-full text-right h-11 px-4 rounded-xl bg-white/5 hover:bg-[#63C0B0]/15 hover:text-[#63C0B0] transition text-sm font-medium border border-white/10"
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

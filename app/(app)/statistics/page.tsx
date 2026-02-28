@@ -500,7 +500,7 @@ export default function StatisticsPage() {
         </div>
 
         {/* Row 1: Finance + Renewal */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
 
           {/* Finance Trend */}
           <Card className="p-6">
@@ -568,7 +568,7 @@ export default function StatisticsPage() {
         </div>
 
         {/* Row 2: Birth Year + Seasonality */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
 
           {/* Birth Year Distribution (مواليد) */}
           <Card className="p-6">

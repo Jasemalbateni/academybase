@@ -19,6 +19,8 @@ export type DbCalendarEvent = {
   note: string | null;
   created_by: string | null;
   created_at: string;
+  /** True when this training event was flagged to consume a session from eligible حصص players. */
+  deduct_sessions: boolean;
 };
 
 export type CalendarEventInsert = {
@@ -27,6 +29,8 @@ export type CalendarEventInsert = {
   date: string;
   event_type: CalendarEventType;
   note?: string | null;
+  /** Persist deduction intent so deletes can restore consumed sessions. */
+  deduct_sessions?: boolean;
 };
 
 export const eventTypeLabel: Record<CalendarEventType, string> = {

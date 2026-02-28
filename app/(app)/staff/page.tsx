@@ -155,8 +155,7 @@ export default function StaffPage() {
 
   function validate(): string | null {
     if (!name.trim()) return "أدخل اسم الموظف.";
-    if (!monthlySalary || monthlySalary <= 0)
-      return "أدخل الراتب الشهري بشكل صحيح.";
+    if (monthlySalary < 0) return "الراتب لا يمكن أن يكون سالباً";
     if (role === "موظف" && !jobTitle.trim())
       return "أدخل مسمى وظيفة الموظف (مثال: تسويق).";
     if (resolveBranchIds(assignMode).length === 0)
@@ -265,9 +264,9 @@ export default function StaffPage() {
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   return (
-    <main className="flex-1 p-8">
+    <main className="flex-1 p-4 md:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold">الطاقم</h1>
             <p className="text-sm text-white/60 mt-1">
@@ -275,7 +274,7 @@ export default function StaffPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3">
               <div className="text-xs text-white/60">إجمالي رواتب النشطين</div>
               <div className="text-lg font-bold">{totalActiveSalary} د.ك</div>
@@ -314,7 +313,9 @@ export default function StaffPage() {
 
         {/* Table */}
         {!loading && branches.length > 0 && (
-          <div className="mt-6 bg-[#111827] rounded-2xl overflow-hidden border border-white/5">
+          <div className="mt-6 bg-[#111827] rounded-2xl border border-white/5">
+            <div className="overflow-x-auto">
+            <div className="min-w-[620px]">
             <div className="bg-[#0F172A] px-6 py-4 text-sm text-white/80 grid grid-cols-[1.6fr_1.2fr_1fr_1.8fr_0.9fr_1.2fr] gap-4">
               <div>الاسم</div>
               <div>الدور</div>
@@ -381,14 +382,16 @@ export default function StaffPage() {
                 })
               )}
             </div>
+            </div>{/* min-w */}
+            </div>{/* overflow-x-auto */}
           </div>
         )}
 
         {/* Modal */}
         {open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-[760px] rounded-[28px] bg-[#111827] border border-white/10 shadow-2xl">
-              <div className="px-8 pt-8 flex items-start justify-between">
+            <div className="w-full max-w-[760px] rounded-[28px] bg-[#111827] border border-white/10 shadow-2xl max-h-[92vh] overflow-y-auto">
+              <div className="px-4 sm:px-8 pt-6 sm:pt-8 flex items-start justify-between">
                 <div>
                   <h2 className="text-3xl font-semibold">
                     {editingId ? "تعديل موظف" : "إضافة موظف"}
@@ -410,7 +413,7 @@ export default function StaffPage() {
                 </button>
               </div>
 
-              <div className="px-8 py-6 space-y-4">
+              <div className="px-4 sm:px-8 py-4 sm:py-6 space-y-4">
                 {/* Save error */}
                 {saveError && (
                   <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
@@ -570,7 +573,7 @@ export default function StaffPage() {
                 </div>
               </div>
 
-              <div className="px-8 pb-8 flex items-center justify-start gap-3">
+              <div className="px-4 sm:px-8 pb-6 sm:pb-8 flex items-center justify-start gap-3">
                 <Button
                   variant="secondary"
                   onClick={() => {

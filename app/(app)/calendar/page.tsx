@@ -19,6 +19,7 @@ import {
   deleteSessionByBranchDate,
   computeFieldCostPerSession,
 } from "@/src/lib/supabase/sessions";
+import { listPlayers, updatePlayer, type DbPlayer } from "@/src/lib/supabase/players";
 
 // ── Arabic weekday → JS getDay() ─────────────────────────────────────────────
 
@@ -153,21 +154,42 @@ const WEEKDAY_LABELS = [
   "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت",
 ];
 
-// ── Manual event form (match & special_event only — training is auto-generated) ──
+// ── Branch color palette (consistent, hash-based) ────────────────────────────
 
-type ManualEventType = "match" | "special_event";
+const BRANCH_PALETTE = [
+  "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+  "text-blue-300 bg-blue-400/10 border-blue-400/20",
+  "text-amber-300 bg-amber-400/10 border-amber-400/20",
+  "text-purple-300 bg-purple-400/10 border-purple-400/20",
+  "text-rose-300 bg-rose-400/10 border-rose-400/20",
+  "text-teal-300 bg-teal-400/10 border-teal-400/20",
+  "text-cyan-300 bg-cyan-400/10 border-cyan-400/20",
+  "text-orange-300 bg-orange-400/10 border-orange-400/20",
+];
+
+function getBranchColor(branchId: string): string {
+  let h = 0;
+  for (let i = 0; i < branchId.length; i++) h = ((h * 31) + branchId.charCodeAt(i)) & 0xffff;
+  return BRANCH_PALETTE[h % BRANCH_PALETTE.length];
+}
+
+// ── Manual event form (match, special_event, and extra training sessions) ────
+
+type ManualEventType = "match" | "special_event" | "training";
 
 const MANUAL_EVENT_OPTIONS: { value: ManualEventType; label: string }[] = [
+  { value: "training",      label: "تدريب إضافي" },
   { value: "match",         label: "مباراة" },
   { value: "special_event", label: "حدث خاص" },
 ];
 
 type EventFormValues = {
-  title:      string;
-  date:       string;
-  event_type: ManualEventType;
-  branch_id:  string;
-  note:       string;
+  title:          string;
+  date:           string;
+  event_type:     ManualEventType;
+  branch_id:      string;
+  note:           string;
+  deductSessions: boolean; // training only: create attendance records for active حصص players
 };
 
 function EventFormModal({
@@ -184,11 +206,13 @@ function EventFormModal({
   saving: boolean;
 }) {
   const [form, setForm] = useState<EventFormValues>(initial);
-  const set = (field: keyof EventFormValues, value: string) =>
+  const set = (field: keyof EventFormValues, value: string | boolean) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  const isTraining = form.event_type === "training";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div
         className="w-full max-w-md rounded-2xl border border-white/15 bg-[#111827] shadow-2xl p-6"
         dir="rtl"
@@ -206,12 +230,38 @@ function EventFormModal({
 
         <div className="space-y-4">
           <div>
+            <label className="block text-xs text-white/60 mb-1.5">نوع الحدث *</label>
+            <select
+              value={form.event_type}
+              onChange={(e) => {
+                const val = e.target.value as ManualEventType;
+                const bName = branches.find((b) => b.id === form.branch_id)?.name ?? "";
+                setForm((f) => ({
+                  ...f,
+                  event_type: val,
+                  title: val === "training"
+                    ? (bName ? `تدريب — ${bName}` : (f.title.trim() || "تدريب إضافي"))
+                    : f.title,
+                  deductSessions: val === "training" ? f.deductSessions : false,
+                }));
+              }}
+              className="w-full rounded-xl bg-white/5 border border-white/15 px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-400/50"
+            >
+              {MANUAL_EVENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-xs text-white/60 mb-1.5">عنوان الحدث *</label>
             <input
               type="text"
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
-              placeholder="مثال: مباراة نهائي الدوري"
+              placeholder={isTraining ? "تدريب إضافي" : "مثال: مباراة نهائي الدوري"}
               className="w-full rounded-xl bg-white/5 border border-white/15 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-emerald-400/50"
             />
           </div>
@@ -227,28 +277,21 @@ function EventFormModal({
           </div>
 
           <div>
-            <label className="block text-xs text-white/60 mb-1.5">نوع الحدث *</label>
-            <select
-              value={form.event_type}
-              onChange={(e) => set("event_type", e.target.value as ManualEventType)}
-              className="w-full rounded-xl bg-white/5 border border-white/15 px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-400/50"
-            >
-              {MANUAL_EVENT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs text-white/60 mb-1.5">الفرع</label>
+            <label className="block text-xs text-white/60 mb-1.5">الفرع{isTraining ? " *" : ""}</label>
             <select
               value={form.branch_id}
-              onChange={(e) => set("branch_id", e.target.value)}
+              onChange={(e) => {
+                const newBid = e.target.value;
+                const bName = branches.find((b) => b.id === newBid)?.name ?? "";
+                setForm((f) => ({
+                  ...f,
+                  branch_id: newBid,
+                  title: f.event_type === "training" && bName ? `تدريب — ${bName}` : f.title,
+                }));
+              }}
               className="w-full rounded-xl bg-white/5 border border-white/15 px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-400/50"
             >
-              <option value="">كل الأكاديمية</option>
+              {!isTraining && <option value="">كل الأكاديمية</option>}
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -256,6 +299,24 @@ function EventFormModal({
               ))}
             </select>
           </div>
+
+          {/* Training: session deduction toggle */}
+          {isTraining && (
+            <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 cursor-pointer hover:border-emerald-400/30 transition select-none">
+              <input
+                type="checkbox"
+                checked={form.deductSessions}
+                onChange={(e) => set("deductSessions", e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded accent-emerald-500 shrink-0"
+              />
+              <div>
+                <div className="text-sm font-semibold text-white">احتساب حصة للاعبين النشطين</div>
+                <div className="text-xs text-white/50 mt-0.5">
+                  سيتم تسجيل حضور اللاعبين النشطين (نظام الحصص، غير مجمدين) في هذا الفرع تلقائياً
+                </div>
+              </div>
+            </label>
+          )}
 
           <div>
             <label className="block text-xs text-white/60 mb-1.5">ملاحظة</label>
@@ -272,7 +333,7 @@ function EventFormModal({
           <button
             type="button"
             onClick={() => onSave(form)}
-            disabled={saving || !form.title.trim() || !form.date}
+            disabled={saving || !form.title.trim() || !form.date || (isTraining && !form.branch_id)}
             className="flex-1 rounded-xl bg-emerald-500/20 border border-emerald-400/30 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "جاري الحفظ..." : "حفظ"}
@@ -493,7 +554,7 @@ function TrainingBadge({
         "border transition",
         canceled
           ? "text-red-300 bg-red-500/10 border-red-500/20 line-through opacity-70"
-          : "text-emerald-300 bg-emerald-400/10 border-emerald-400/20"
+          : getBranchColor(session.branchId)
       )}
       title={`${session.branchName}${timeStr ? ` — ${timeStr}` : ""}${canceled ? " (ملغي)" : ""}`}
     >
@@ -539,6 +600,7 @@ export default function CalendarPage() {
   const [branches,  setBranches]  = useState<DbBranch[]>([]);
   const [events,    setEvents]    = useState<DbCalendarEvent[]>([]);
   const [userRole,  setUserRole]  = useState<UserRole>("admin_staff");
+  const [players,   setPlayers]   = useState<DbPlayer[]>([]);
 
   const [loading,  setLoading]   = useState(true);
   const [error,    setError]     = useState<string | null>(null);
@@ -567,13 +629,15 @@ export default function CalendarPage() {
     let cancelled = false;
     const load = async () => {
       try {
-        const [dbBranches, role] = await Promise.all([
+        const [dbBranches, role, dbPlayers] = await Promise.all([
           listBranches(),
           getUserRole(),
+          listPlayers(),
         ]);
         if (cancelled) return;
         setBranches(dbBranches);
         setUserRole(role);
+        setPlayers(dbPlayers);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "خطأ في التحميل");
       }
@@ -756,17 +820,73 @@ export default function CalendarPage() {
     if (!form.title.trim() || !form.date) return;
     setSaving(true);
     try {
+      // Pre-compute session deduction eligibility BEFORE creating the event so we
+      // can persist the intent on the record (needed for restore on delete).
+      let willDeductSessions = false;
+      let qualifying: DbPlayer[] = [];
+
+      if (form.event_type === "training" && form.deductSessions && form.branch_id) {
+        qualifying = players.filter((p) => {
+          if (p.branch_id !== form.branch_id) return false;
+          if (p.is_paused) return false;
+          if (p.subscription_mode !== "حصص") return false;
+          if (p.start_date && p.start_date > form.date) return false;
+          if (!p.end_date) return true; // no end date = unlimited
+          return p.end_date >= form.date;
+        });
+
+        const branch = branches.find((b) => b.id === form.branch_id);
+        const branchJsDays = (branch?.days ?? [])
+          .map((day) => ARABIC_TO_JS_DAY[day])
+          .filter((n): n is number => n !== undefined);
+        const isScheduledDay = branchJsDays.includes(
+          new Date(form.date + "T00:00:00").getDay()
+        );
+
+        // Only non-scheduled days with eligible players consume a session
+        willDeductSessions = !isScheduledDay && qualifying.length > 0;
+      }
+
       const payload: CalendarEventInsert = {
-        title:      form.title.trim(),
-        date:       form.date,
-        event_type: form.event_type as CalendarEventType,
-        branch_id:  form.branch_id || null,
-        note:       form.note.trim() || null,
+        title:           form.title.trim(),
+        date:            form.date,
+        event_type:      form.event_type as CalendarEventType,
+        branch_id:       form.branch_id || null,
+        note:            form.note.trim() || null,
+        deduct_sessions: willDeductSessions,
       };
       const created = await createCalendarEvent(payload);
       setEvents((prev) =>
         [...prev, created].sort((a, b) => a.date.localeCompare(b.date))
       );
+
+      // Note: attendance records are NOT pre-created here — the date appears in the
+      // attendance page via calendar events merge, and the admin marks present/absent manually.
+
+      // Deduct sessions only when the session day has already arrived.
+      // If the event is for a future date, deduction will NOT happen yet —
+      // the session will simply not be consumed until the day is reached
+      // (and if the event is deleted before that day, nothing needs restoring).
+      if (willDeductSessions && qualifying.length > 0) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (form.date <= todayStr) {
+          // Optimistically update local player sessions count
+          setPlayers((prev) =>
+            prev.map((p) =>
+              qualifying.some((q) => q.id === p.id)
+                ? { ...p, sessions: Math.max(0, p.sessions - 1) }
+                : p
+            )
+          );
+          // Server-side decrement (fire-and-forget)
+          Promise.all(
+            qualifying.map((p) =>
+              updatePlayer(p.id, { sessions: Math.max(0, p.sessions - 1) }).catch(() => null)
+            )
+          ).catch(() => null);
+        }
+      }
+
       setModal(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "خطأ في حفظ الحدث");
@@ -793,8 +913,47 @@ export default function CalendarPage() {
   async function handleDeleteEvent(id: string) {
     setSaving(true);
     try {
+      // Capture event before deletion so we can decide whether to restore sessions.
+      const ev = events.find((e) => e.id === id);
+
       await deleteCalendarEvent(id);
       setEvents((prev) => prev.filter((e) => e.id !== id));
+
+      // Restore sessions consumed by this extra training event, but only if:
+      //   1. The event was flagged to deduct sessions (deduct_sessions = true)
+      //   2. The session day has already arrived (ev.date <= today)
+      //      — if deleted before the day, no deduction happened, nothing to restore
+      if (ev && ev.event_type === "training" && ev.deduct_sessions && ev.branch_id) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (ev.date <= todayStr) {
+          const qualifying = players.filter((p) => {
+            if (p.branch_id !== ev.branch_id) return false;
+            if (p.is_paused) return false;
+            if (p.subscription_mode !== "حصص") return false;
+            if (p.start_date && p.start_date > ev.date) return false;
+            if (!p.end_date) return true;
+            return p.end_date >= ev.date;
+          });
+
+          if (qualifying.length > 0) {
+            // Optimistically restore sessions in local state
+            setPlayers((prev) =>
+              prev.map((p) =>
+                qualifying.some((q) => q.id === p.id)
+                  ? { ...p, sessions: p.sessions + 1 }
+                  : p
+              )
+            );
+            // Server-side restore (fire-and-forget)
+            Promise.all(
+              qualifying.map((p) =>
+                updatePlayer(p.id, { sessions: p.sessions + 1 }).catch(() => null)
+              )
+            ).catch(() => null);
+          }
+        }
+      }
+
       setModal(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "خطأ في حذف الحدث");
@@ -870,13 +1029,18 @@ export default function CalendarPage() {
       {/* Modals */}
       {modal?.type === "add" && (
         <EventFormModal
-          initial={{
-            title:      "",
-            date:       modal.date,
-            event_type: "match",
-            branch_id:  branchFilter !== "all" ? branchFilter : "",
-            note:       "",
-          }}
+          initial={(() => {
+            const bid = branchFilter !== "all" ? branchFilter : (branches[0]?.id ?? "");
+            const bName = branches.find((b) => b.id === bid)?.name ?? "";
+            return {
+              title:          bName ? `تدريب — ${bName}` : "",
+              date:           modal.date,
+              event_type:     "training" as ManualEventType,
+              branch_id:      bid,
+              note:           "",
+              deductSessions: false,
+            };
+          })()}
           branches={branches}
           onSave={handleAddEvent}
           onClose={() => setModal(null)}
@@ -894,7 +1058,7 @@ export default function CalendarPage() {
         />
       )}
 
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -925,7 +1089,7 @@ export default function CalendarPage() {
                 onClick={() => setModal({ type: "add", date: today })}
                 className="h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 px-4 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 transition"
               >
-                + إضافة حدث
+                + إضافة حدث / تدريب
               </button>
             )}
           </div>
@@ -1002,11 +1166,12 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar grid */}
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+        <div className="min-w-[360px] bg-white/5 overflow-hidden rounded-2xl">
           {/* Weekday headers */}
           <div className="grid grid-cols-7 border-b border-white/10">
             {WEEKDAY_LABELS.map((label) => (
-              <div key={label} className="py-3 text-center text-xs font-semibold text-white/55">
+              <div key={label} className="py-3 md:py-4 text-center text-xs md:text-sm font-semibold text-white/55">
                 {label}
               </div>
             ))}
@@ -1032,7 +1197,7 @@ export default function CalendarPage() {
                   <div
                     key={idx}
                     className={cn(
-                      "min-h-[90px] border-b border-l border-white/5 p-1 relative",
+                      "min-h-[90px] md:min-h-[140px] border-b border-l border-white/5 p-1.5 relative",
                       idx % 7 === 0 && "border-l-0",
                       !dateISO && "bg-white/[0.01]",
                       isToday && "bg-emerald-400/5"
@@ -1054,8 +1219,8 @@ export default function CalendarPage() {
                             <button
                               type="button"
                               onClick={() => setModal({ type: "add", date: dateISO })}
-                              className="h-4 w-4 rounded-full bg-white/5 text-white/30 hover:bg-blue-400/20 hover:text-blue-300 transition text-[10px] flex items-center justify-center"
-                              title="إضافة مباراة أو حدث خاص"
+                              className="h-5 w-5 rounded-full bg-white/10 text-white/50 hover:bg-[#63C0B0]/20 hover:text-[#63C0B0] transition text-xs font-bold flex items-center justify-center"
+                              title="إضافة حدث أو تدريب"
                             >
                               +
                             </button>
@@ -1119,7 +1284,8 @@ export default function CalendarPage() {
               })}
             </div>
           )}
-        </div>
+        </div>{/* min-w */}
+        </div>{/* overflow-x-auto */}
 
         {/* Manual events list for this month */}
         {manualEventsFiltered.length > 0 && (

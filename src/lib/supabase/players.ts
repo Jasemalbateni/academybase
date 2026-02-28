@@ -16,6 +16,7 @@ export type DbPlayer = {
   start_date: string;   // ISO YYYY-MM-DD
   end_date: string | null; // ISO YYYY-MM-DD
   is_legacy: boolean;
+  is_paused: boolean;   // Feature C: subscription paused
   created_at: string;
   updated_at: string;
 };
@@ -33,7 +34,7 @@ export type PlayerInsert = {
   is_legacy: boolean;
 };
 
-export type PlayerUpdate = Partial<PlayerInsert>;
+export type PlayerUpdate = Partial<PlayerInsert> & { is_paused?: boolean };
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -86,4 +87,37 @@ export async function deletePlayer(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("players").delete().eq("id", id);
   if (error) throw new Error(`${error.message} [${error.code}]`);
+}
+
+// ── Feature B: Extend ─────────────────────────────────────────────────────────
+
+/** Adds `days` to the player's current end_date and saves. */
+export async function extendPlayer(id: string, days: number): Promise<DbPlayer> {
+  const supabase = createClient();
+  const { data: p } = await supabase
+    .from("players")
+    .select("end_date")
+    .eq("id", id)
+    .single();
+
+  const base = p?.end_date
+    ? (() => {
+        const [y, m, d] = (p.end_date as string).split("-").map(Number);
+        return new Date(y, m - 1, d);
+      })()
+    : new Date();
+
+  base.setDate(base.getDate() + days);
+  const newEnd = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+  return updatePlayer(id, { end_date: newEnd });
+}
+
+// ── Feature C: Pause / Resume ────────────────────────────────────────────────
+
+export async function pausePlayer(id: string): Promise<DbPlayer> {
+  return updatePlayer(id, { is_paused: true });
+}
+
+export async function resumePlayer(id: string): Promise<DbPlayer> {
+  return updatePlayer(id, { is_paused: false });
 }

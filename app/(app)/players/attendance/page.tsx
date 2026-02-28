@@ -8,6 +8,7 @@ import {
   upsertAttendance,
 } from "@/src/lib/supabase/attendance";
 import { listPaymentPeriods, type PaymentPeriod } from "@/src/lib/supabase/payments";
+import { listCalendarEvents } from "@/src/lib/supabase/calendar";
 import { createClient } from "@/lib/supabase/browser";
 
 // ── Error helper ──────────────────────────────────────────────────────────────
@@ -50,6 +51,12 @@ const ARABIC_DAY_TO_JS: Record<string, number> = {
 function currentMonthKey(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function firstDayOfMonth(ym: string): string { return `${ym}-01`; }
+function lastDayOfMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 }
 
 /** Local-timezone ISO date — avoids UTC day-shift on UTC+ systems. */
@@ -158,6 +165,7 @@ type Player = {
   sessions:         number;
   startDate:        string;
   endDate:          string | null;
+  isPaused:         boolean;  // Feature C
 };
 
 type BranchLite = {
@@ -188,6 +196,7 @@ function dbToPlayer(db: DbPlayer): Player {
     sessions:         db.sessions,
     startDate:        db.start_date,
     endDate:          db.end_date,
+    isPaused:         db.is_paused ?? false,
   };
 }
 
@@ -217,13 +226,14 @@ function buildPeriodsMap(
     const branch = player?.branchId ? branchMap.get(player.branchId) : undefined;
 
     const periods: SubscriptionPeriod[] = rows.map((row, idx) => {
-      if (row.end !== null) return { start: row.start, end: row.end };
-
       const isLast = idx === rows.length - 1;
 
+      // For the last period: always use player.endDate (reflects extensions beyond payment.subscription_end)
       if (isLast && player?.endDate) {
         return { start: row.start, end: player.endDate };
       }
+
+      if (row.end !== null) return { start: row.start, end: row.end };
 
       if (player) {
         if (player.subscriptionMode === "شهري") {
@@ -262,10 +272,12 @@ export default function AttendancePage() {
   const [selectedMonth,    setSelectedMonth]    = useState<string>(currentMonthKey);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
 
-  const [players,       setPlayers]       = useState<Player[]>([]);
-  const [branches,      setBranches]      = useState<BranchLite[]>([]);
-  const [paymentRaws,   setPaymentRaws]   = useState<PaymentPeriod[]>([]);
-  const [attendanceMap, setAttendanceMap] = useState<AttendanceMap>(new Map());
+  const [players,               setPlayers]               = useState<Player[]>([]);
+  const [branches,              setBranches]              = useState<BranchLite[]>([]);
+  const [paymentRaws,           setPaymentRaws]           = useState<PaymentPeriod[]>([]);
+  const [attendanceMap,         setAttendanceMap]         = useState<AttendanceMap>(new Map());
+  // Extra training dates from calendar events: branchId → Set of ISO dates in selected month
+  const [calendarTrainingSets,  setCalendarTrainingSets]  = useState<Map<string, Set<string>>>(new Map());
   const [academyName,   setAcademyName]   = useState<string>("");
   const [printMode,        setPrintMode]        = useState<"monthly" | "weekly" | "custom">("monthly");
   const [printWeekIdx,     setPrintWeekIdx]     = useState<number>(0);
@@ -289,11 +301,12 @@ export default function AttendancePage() {
     try {
       if (!staticLoadedRef.current) {
         // First load: fetch everything in parallel
-        const [dbPlayers, dbBranches, dbAttendance, periods] = await Promise.all([
+        const [dbPlayers, dbBranches, dbAttendance, periods, calEvents] = await Promise.all([
           listPlayers(),
           listBranches(),
           listAttendanceByMonth(month),
           listPaymentPeriods(),
+          listCalendarEvents(firstDayOfMonth(month), lastDayOfMonth(month)),
         ]);
 
         setPlayers(dbPlayers.map(dbToPlayer));
@@ -306,6 +319,15 @@ export default function AttendancePage() {
           map.set(attKey(rec.player_id, rec.date), rec.present);
         }
         setAttendanceMap(map);
+
+        // Build map of extra training dates from calendar events
+        const trainingSets = new Map<string, Set<string>>();
+        for (const ev of calEvents) {
+          if (ev.event_type !== "training" || !ev.branch_id) continue;
+          if (!trainingSets.has(ev.branch_id)) trainingSets.set(ev.branch_id, new Set());
+          trainingSets.get(ev.branch_id)!.add(ev.date);
+        }
+        setCalendarTrainingSets(trainingSets);
 
         // Fetch academy name sequentially (after parallel loads) so we don't
         // add a competing getSession() call that races on iOS Safari navigator.locks.
@@ -329,13 +351,25 @@ export default function AttendancePage() {
           }
         } catch { /* non-critical: print header falls back to "الأكاديمية" */ }
       } else {
-        // Month change: only re-fetch attendance records (players/branches unchanged)
-        const dbAttendance = await listAttendanceByMonth(month);
+        // Month change: re-fetch attendance records + calendar training events for new month
+        const [dbAttendance, calEvents] = await Promise.all([
+          listAttendanceByMonth(month),
+          listCalendarEvents(firstDayOfMonth(month), lastDayOfMonth(month)),
+        ]);
         const map: AttendanceMap = new Map();
         for (const rec of dbAttendance) {
           map.set(attKey(rec.player_id, rec.date), rec.present);
         }
         setAttendanceMap(map);
+
+        // Rebuild calendar training map for the new month
+        const trainingSets = new Map<string, Set<string>>();
+        for (const ev of calEvents) {
+          if (ev.event_type !== "training" || !ev.branch_id) continue;
+          if (!trainingSets.has(ev.branch_id)) trainingSets.set(ev.branch_id, new Set());
+          trainingSets.get(ev.branch_id)!.add(ev.date);
+        }
+        setCalendarTrainingSets(trainingSets);
       }
     } catch (e) {
       console.error("[attendance] load error:", e);
@@ -611,10 +645,21 @@ export default function AttendancePage() {
             const sessionDates = branch ? getSessionDates(year, month, branch.days) : [];
             const periods      = periodsMap.get(player.id) ?? [];
 
-            const dateEntries: DateEntry[] = sessionDates.map((d) => {
-              const iso = toISODate(d);
-              return { date: d, iso, state: getDateState(iso, periods) };
-            });
+            // Merge scheduled session dates with extra calendar training dates
+            const sessionISOSet = new Set(sessionDates.map(toISODate));
+            const extraTraining = player.branchId
+              ? (calendarTrainingSets.get(player.branchId) ?? new Set<string>())
+              : new Set<string>();
+            for (const iso of extraTraining) {
+              if (iso.startsWith(selectedMonth)) sessionISOSet.add(iso);
+            }
+            const allISOs = Array.from(sessionISOSet).sort();
+
+            const dateEntries: DateEntry[] = allISOs.map((iso) => ({
+              date: new Date(iso + "T00:00:00"),
+              iso,
+              state: getDateState(iso, periods),
+            }));
 
             const presentCount = dateEntries.filter(
               ({ state, iso }) =>
@@ -805,22 +850,37 @@ type PlayerCardProps = {
   onToggle:      (player: Player, isoDate: string) => Promise<void>;
 };
 
+// Today's ISO date for Feature C paused chip logic
+function getTodayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function PlayerCard({
   player, branch, dateEntries, attendanceMap, savingKey, presentCount, totalActive, pct, onToggle,
 }: PlayerCardProps) {
+  const todayISO = getTodayISO();
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-white/[0.03]">
         <div>
-          <div className="font-semibold text-sm">{player.name}</div>
+          <div className="flex items-center gap-2 font-semibold text-sm">
+            {player.name}
+            {player.isPaused && (
+              <span className="rounded-full bg-blue-500/15 border border-blue-400/25 px-2 py-0.5 text-[10px] font-medium text-blue-400">
+                تجميد
+              </span>
+            )}
+          </div>
           <div className="text-xs text-white/50 mt-0.5">
             {branch ? branch.name : "بدون فرع"}
             {player.phone ? ` · ${player.phone}` : ""}
           </div>
         </div>
-        <SubscriptionBadge endDate={player.endDate} />
+        <SubscriptionBadge endDate={player.isPaused ? null : player.endDate} isPaused={player.isPaused} />
       </div>
 
       {/* Date chips */}
@@ -836,6 +896,8 @@ function PlayerCard({
               const present  = attendanceMap.get(key) ?? false;
               const isSaving = savingKey === key;
               const dayName  = JS_DAY_TO_ARABIC[date.getDay()];
+              // Feature C: paused chip for today/future dates when player is paused
+              const isPausedDate = player.isPaused && iso >= todayISO && state === "active";
               return (
                 <DateChip
                   key={iso}
@@ -844,7 +906,8 @@ function PlayerCard({
                   state={state}
                   present={present}
                   isSaving={isSaving}
-                  onToggle={() => state === "active" && onToggle(player, iso)}
+                  isPausedDate={isPausedDate}
+                  onToggle={() => !isPausedDate && state === "active" && onToggle(player, iso)}
                 />
               );
             })}
@@ -866,15 +929,29 @@ function PlayerCard({
 // ── Date chip — three states ───────────────────────────────────────────────────
 
 type DateChipProps = {
-  dayShort: string;
-  dayNum:   number;
-  state:    DateState;
-  present:  boolean;
-  isSaving: boolean;
-  onToggle: () => void;
+  dayShort:     string;
+  dayNum:       number;
+  state:        DateState;
+  present:      boolean;
+  isSaving:     boolean;
+  isPausedDate?: boolean;  // Feature C
+  onToggle:     () => void;
 };
 
-function DateChip({ dayShort, dayNum, state, present, isSaving, onToggle }: DateChipProps) {
+function DateChip({ dayShort, dayNum, state, present, isSaving, isPausedDate, onToggle }: DateChipProps) {
+
+  // Feature C: paused chip (blue, non-interactive)
+  if (isPausedDate) {
+    return (
+      <div className="flex flex-col items-center gap-1 min-w-[52px] rounded-xl border border-blue-500/20 bg-blue-500/5 px-2 py-2 select-none">
+        <span className="text-[10px] text-white/30 font-medium">{dayShort}</span>
+        <span className="text-sm font-bold text-white/30">{dayNum}</span>
+        <span className="text-[9px] text-blue-400/70 font-medium leading-tight text-center">
+          تجميد
+        </span>
+      </div>
+    );
+  }
 
   if (state === "not_subscribed") {
     return (
@@ -944,7 +1021,10 @@ function DateChip({ dayShort, dayNum, state, present, isSaving, onToggle }: Date
 
 // ── Subscription status badge ─────────────────────────────────────────────────
 
-function SubscriptionBadge({ endDate }: { endDate: string | null }) {
+function SubscriptionBadge({ endDate, isPaused }: { endDate: string | null; isPaused?: boolean }) {
+  if (isPaused) {
+    return <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-400">تجميد</span>;
+  }
   if (!endDate) {
     return <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">نشط</span>;
   }

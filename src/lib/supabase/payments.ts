@@ -93,3 +93,34 @@ export async function createPayment(payload: PaymentInsert): Promise<DbPayment> 
   if (error) throw new Error(`${error.message} [${error.code}]`);
   return data as DbPayment;
 }
+
+export async function updatePayment(
+  id: string,
+  payload: Partial<Pick<PaymentInsert, "amount" | "note">>
+): Promise<DbPayment> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("payments")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`${error.message} [${error.code}]`);
+  return data as DbPayment;
+}
+
+/** Latest payment first. Used by players page to update amount when price changes. */
+export async function listPlayerPayments(playerId: string): Promise<DbPayment[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("player_id", playerId)
+    .order("date", { ascending: false });
+
+  if (error) throw new Error(`${error.message} [${error.code}]`);
+  return (data ?? []) as DbPayment[];
+}
