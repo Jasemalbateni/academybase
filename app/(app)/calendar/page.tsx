@@ -15,11 +15,12 @@ import {
   type CalendarEventInsert,
 } from "@/src/lib/supabase/calendar";
 import {
-  upsertSession,
-  deleteSessionByBranchDate,
   computeFieldCostPerSession,
+  orchestrateCancelSession,
+  orchestrateRestoreSession,
 } from "@/src/lib/supabase/sessions";
-import { listPlayers, updatePlayer, type DbPlayer } from "@/src/lib/supabase/players";
+import { listPlayers, updatePlayer, isPlayerActiveOnDate, type DbPlayer } from "@/src/lib/supabase/players";
+import { listStaff, type DbStaff } from "@/src/lib/supabase/staff";
 
 // ── Arabic weekday → JS getDay() ─────────────────────────────────────────────
 
@@ -83,6 +84,31 @@ function generateTrainingSessions(
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Returns true only when the session has fully ended:
+ *  - past date             → always true (end time has definitely passed)
+ *  - future date           → always false (session hasn't happened yet)
+ *  - today (same calendar date) → true only if current local time >= branch end_time
+ *
+ * This prevents deducting sessions mid-day when the session is still upcoming.
+ * Falls back to "ended" when no end_time is configured for the branch.
+ */
+function sessionHasEnded(
+  dateISO:  string,
+  endTime:  string | null | undefined,
+  todayStr: string,
+): boolean {
+  if (dateISO < todayStr) return true;
+  if (dateISO > todayStr) return false;
+  // Same calendar day: compare current local time with configured end time
+  if (!endTime) return true; // no end time configured → assume session is over
+  const [hh, mm] = endTime.split(":").map(Number);
+  const endMinutes = (Number.isFinite(hh) ? hh : 0) * 60 + (Number.isFinite(mm) ? mm : 0);
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return nowMinutes >= endMinutes;
 }
 
 function monthKey(iso: string) {
@@ -442,22 +468,30 @@ function EditEventModal({
   );
 }
 
-// ── Cancel session dialog (field cost removal) ────────────────────────────────
+// ── Cancel session dialog ─────────────────────────────────────────────────────
 
 function CancelSessionDialog({
   branchName,
   date,
   sessionVal,
+  isPerSession,
+  affectedPlayersCount,
+  affectedStaffCount,
   onConfirm,
   onDismiss,
 }: {
-  branchName: string;
-  date:       string;
-  sessionVal: number;
-  onConfirm:  (removeFieldCost: boolean) => void;
-  onDismiss:  () => void;
+  branchName:           string;
+  date:                 string;
+  sessionVal:           number;
+  isPerSession:         boolean;
+  affectedPlayersCount: number;
+  affectedStaffCount:   number;
+  onConfirm:    (removeFieldCost: boolean, deductCoach: boolean, extendPlayers: boolean) => void;
+  onDismiss:    () => void;
 }) {
   const [removeFieldCost, setRemoveFieldCost] = useState(false);
+  const [deductCoach,     setDeductCoach]     = useState(false);
+  const [extendPlayers,   setExtendPlayers]   = useState(false);
 
   const displayDate = `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
 
@@ -485,32 +519,110 @@ function CancelSessionDialog({
           <span className="font-semibold text-white">{displayDate}</span>
         </p>
 
-        {/* Field cost checkbox */}
-        <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 cursor-pointer hover:border-emerald-400/30 transition">
-          <input
-            type="checkbox"
-            checked={removeFieldCost}
-            onChange={(e) => setRemoveFieldCost(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded accent-emerald-500 shrink-0"
-          />
-          <div>
-            <div className="text-sm font-semibold text-white">إزالة تكلفة الملعب</div>
-            <div className="text-xs text-white/50 mt-0.5">
-              هذا الفرع محسوب بالحصة — تكلفة الجلسة الواحدة:{" "}
-              <span className="text-emerald-300 font-semibold">
-                {sessionVal > 0 ? `${sessionVal.toLocaleString("ar-SA")} د.ك` : "—"}
-              </span>
+        {/* Impact preview */}
+        <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 mb-4">
+          <div className="text-xs font-semibold text-amber-300 mb-2">📊 معاينة التأثير</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-sky-400/10 flex items-center justify-center">
+                <svg className="h-3.5 w-3.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-white leading-none">{affectedPlayersCount}</div>
+                <div className="text-[10px] text-white/45">لاعب نشط</div>
+              </div>
             </div>
-            <div className="text-xs text-white/40 mt-1">
-              عند التأشير، تُسجَّل الجلسة بتكلفة صفر في التقارير المالية
+            <div className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-amber-400/10 flex items-center justify-center">
+                <svg className="h-3.5 w-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-white leading-none">{affectedStaffCount}</div>
+                <div className="text-[10px] text-white/45">مدرب مرتبط</div>
+              </div>
             </div>
           </div>
-        </label>
+          {isPerSession && sessionVal > 0 && (
+            <div className="mt-2 text-[10px] text-white/40 border-t border-white/10 pt-2">
+              تكلفة الملعب للجلسة: <span className="text-emerald-300 font-semibold">{sessionVal} د.ك</span>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2">
+
+          {/* Field cost checkbox — only for per_session branches */}
+          {isPerSession && (
+            <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 cursor-pointer hover:border-emerald-400/30 transition">
+              <input
+                type="checkbox"
+                checked={removeFieldCost}
+                onChange={(e) => setRemoveFieldCost(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded accent-emerald-500 shrink-0"
+              />
+              <div>
+                <div className="text-sm font-semibold text-white">إزالة تكلفة الملعب</div>
+                <div className="text-xs text-white/50 mt-0.5">
+                  هذا الفرع محسوب بالحصة — تكلفة الجلسة الواحدة:{" "}
+                  <span className="text-emerald-300 font-semibold">
+                    {sessionVal > 0 ? `${sessionVal.toLocaleString("ar-SA")} د.ك` : "—"}
+                  </span>
+                </div>
+                <div className="text-xs text-white/40 mt-1">
+                  عند التأشير، تُسجَّل الجلسة بتكلفة صفر في التقارير المالية
+                </div>
+              </div>
+            </label>
+          )}
+
+          {/* Coach salary deduction checkbox */}
+          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 cursor-pointer hover:border-amber-400/30 transition">
+            <input
+              type="checkbox"
+              checked={deductCoach}
+              onChange={(e) => setDeductCoach(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded accent-amber-500 shrink-0"
+            />
+            <div>
+              <div className="text-sm font-semibold text-white">خصم راتب الجلسة من المدرب</div>
+              <div className="text-xs text-white/50 mt-0.5">
+                يُخصم مبلغ الجلسة الواحدة من رواتب المدربين المرتبطين بهذا الفرع
+              </div>
+              <div className="text-xs text-white/40 mt-1">
+                يظهر كبند خصم تحت مصروف الرواتب في صفحة التمويل
+              </div>
+            </div>
+          </label>
+
+          {/* Extend players checkbox */}
+          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 cursor-pointer hover:border-sky-400/30 transition">
+            <input
+              type="checkbox"
+              checked={extendPlayers}
+              onChange={(e) => setExtendPlayers(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded accent-sky-500 shrink-0"
+            />
+            <div>
+              <div className="text-sm font-semibold text-white">تمديد اللاعبين بحصة إضافية</div>
+              <div className="text-xs text-white/50 mt-0.5">
+                جميع اللاعبين المشتركين في هذا الفرع يحصلون على حصة إضافية تعويضاً
+              </div>
+              <div className="text-xs text-white/40 mt-1">
+                اشتراك بالحصص: +1 حصة · اشتراك بالتاريخ: تمديد مدة مكافئة
+              </div>
+            </div>
+          </label>
+
+        </div>
 
         <div className="mt-5 flex gap-3">
           <button
             type="button"
-            onClick={() => onConfirm(removeFieldCost)}
+            onClick={() => onConfirm(removeFieldCost, deductCoach, extendPlayers)}
             className="flex-1 rounded-xl bg-red-500/20 border border-red-500/30 py-2.5 text-sm font-semibold text-red-300 hover:bg-red-500/30 transition"
           >
             تأكيد الإلغاء
@@ -596,11 +708,14 @@ type ActiveModal = AddModal | EditModal | null;
 export default function CalendarPage() {
   const [selectedMonth, setSelectedMonth] = useState(monthKey(todayISO()));
   const [branchFilter,  setBranchFilter]  = useState<string>("all");
+  // Mobile: day-focused navigation
+  const [selectedDay, setSelectedDay] = useState<string>(todayISO());
 
   const [branches,  setBranches]  = useState<DbBranch[]>([]);
   const [events,    setEvents]    = useState<DbCalendarEvent[]>([]);
   const [userRole,  setUserRole]  = useState<UserRole>("admin_staff");
   const [players,   setPlayers]   = useState<DbPlayer[]>([]);
+  const [staff,     setStaff]     = useState<DbStaff[]>([]);
 
   const [loading,  setLoading]   = useState(true);
   const [error,    setError]     = useState<string | null>(null);
@@ -609,12 +724,14 @@ export default function CalendarPage() {
 
   const [modal, setModal] = useState<ActiveModal>(null);
 
-  // ── Pending cancel: session waiting for field-cost confirmation ───────────
-  // Set when cancelling a per_session branch training — shows dialog.
+  // ── Pending cancel: session waiting for cancellation options confirmation ───
   const [pendingCancel, setPendingCancel] = useState<{
-    session:    GeneratedSession;
-    branch:     DbBranch;
-    sessionVal: number; // computed per-session field cost
+    session:              GeneratedSession;
+    branch:               DbBranch | null;
+    sessionVal:           number;    // computed per-session field cost (0 if not per_session)
+    isPerSession:         boolean;   // whether to show field cost checkbox
+    affectedPlayersCount: number;    // players active on this session date
+    affectedStaffCount:   number;    // active staff assigned to this branch
   } | null>(null);
 
   const canEdit =
@@ -629,15 +746,17 @@ export default function CalendarPage() {
     let cancelled = false;
     const load = async () => {
       try {
-        const [dbBranches, role, dbPlayers] = await Promise.all([
+        const [dbBranches, role, dbPlayers, dbStaff] = await Promise.all([
           listBranches(),
           getUserRole(),
           listPlayers(),
+          listStaff(),
         ]);
         if (cancelled) return;
         setBranches(dbBranches);
         setUserRole(role);
         setPlayers(dbPlayers);
+        setStaff(dbStaff);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "خطأ في التحميل");
       }
@@ -668,6 +787,16 @@ export default function CalendarPage() {
     load();
     return () => { cancelled = true; };
   }, [selectedMonth]);
+
+  // Sync selectedDay when month changes: keep today if in month, else first day
+  useEffect(() => {
+    const first = firstOfMonth(selectedMonth);
+    const last  = lastOfMonth(selectedMonth);
+    if (selectedDay < first || selectedDay > last) {
+      const t = todayISO();
+      setSelectedDay(t >= first && t <= last ? t : first);
+    }
+  }, [selectedMonth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-generate training sessions from branch schedules (in-memory) ───────
   const generatedSessions = useMemo(
@@ -729,84 +858,113 @@ export default function CalendarPage() {
       // ── Restore training ──────────────────────────────────────────────────
       setToggling(key);
       try {
+        const cancelledEvent = events.find((e) => e.id === canceledId);
+        // Use the stored player IDs from cancel time — this is the canonical list
+        // of who was compensated and must have their compensation reversed.
+        // Falls back to [] for sessions cancelled before migration 30, which
+        // skips reversal safely rather than using stale current-state evaluation.
+        const compensatedPlayerIds = cancelledEvent?.compensated_player_ids ?? [];
+
+        // All DB operations run first in an ordered, rollback-capable sequence.
+        // The calendar event is only removed once all DB operations succeed —
+        // this ensures the UI never shows the training as "active" while the
+        // session record or player sessions are still in the cancelled state.
+        const result = await orchestrateRestoreSession(
+          session.branchId,
+          session.date,
+          compensatedPlayerIds,
+          branch?.days ?? []
+        );
+        if (!result.ok) throw new Error(result.error);
+
         await deleteCalendarEvent(canceledId);
         setEvents((prev) => prev.filter((e) => e.id !== canceledId));
-        // Also cleanup linked session record (fire-and-forget)
-        deleteSessionByBranchDate(session.branchId, session.date).catch(() => null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "خطأ في تحديث الجلسة");
       } finally {
         setToggling(null);
       }
     } else {
-      // ── Cancel training ───────────────────────────────────────────────────
-      // For per_session branches with monthly rent: show field-cost dialog first
+      // ── Cancel training: always show the options dialog ───────────────────
       const isPerSession =
-        branch &&
+        !!branch &&
         branch.rent_type === "per_session" &&
         Number(branch.monthly_rent ?? 0) > 0;
 
+      let sessionVal = 0;
       if (isPerSession && branch) {
-        const [y, m] = session.date.split("-").map(Number);
-        const sessionVal = computeFieldCostPerSession(
-          Number(branch.monthly_rent),
-          y,
-          m,
-          branch.days ?? []
+        const [sy, sm] = session.date.split("-").map(Number);
+        sessionVal = computeFieldCostPerSession(
+          Number(branch.monthly_rent), sy, sm, branch.days ?? []
         );
-        setPendingCancel({ session, branch, sessionVal });
-      } else {
-        // fixed_monthly or no rent → cancel directly, no cost dialog
-        setToggling(key);
-        try {
-          const newEv = await createCalendarEvent({
-            branch_id:  session.branchId,
-            date:       session.date,
-            event_type: "canceled",
-            title:      `تدريب ملغي — ${session.branchName}`,
-            note:       null,
-          });
-          setEvents((prev) =>
-            [...prev, newEv].sort((a, b) => a.date.localeCompare(b.date))
-          );
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "خطأ في تحديث الجلسة");
-        } finally {
-          setToggling(null);
-        }
       }
+
+      // Compute impact counts using real data already loaded
+      const affectedPlayersCount = players.filter(
+        (p) => p.branch_id === session.branchId && isPlayerActiveOnDate(p, session.date)
+      ).length;
+      const affectedStaffCount = staff.filter(
+        (s) => s.is_active && (s.branch_ids ?? []).includes(session.branchId)
+      ).length;
+
+      setPendingCancel({
+        session,
+        branch: branch ?? null,
+        sessionVal,
+        isPerSession,
+        affectedPlayersCount,
+        affectedStaffCount,
+      });
     }
   }, [canceledMap, branches]);
 
   // ── Confirm cancel (from dialog) ──────────────────────────────────────────
-  const handleConfirmCancel = useCallback(async (removeFieldCost: boolean) => {
+  const handleConfirmCancel = useCallback(async (
+    removeFieldCost: boolean,
+    deductCoach:     boolean,
+    extendPlayers:   boolean
+  ) => {
     if (!pendingCancel) return;
-    const { session, sessionVal } = pendingCancel;
+    const { session, sessionVal, branch } = pendingCancel;
     const key = `${session.branchId}:${session.date}`;
     setPendingCancel(null);
     setToggling(key);
     try {
+      const noteParts: string[] = [];
+      if (removeFieldCost) noteParts.push("تم إزالة تكلفة الملعب");
+      if (deductCoach)     noteParts.push("تم خصم راتب الجلسة");
+      if (extendPlayers)   noteParts.push("تم تمديد اللاعبين");
+      const note = noteParts.length ? noteParts.join(" · ") : null;
+
+      // All DB operations run first in a single ordered, rollback-capable call.
+      // Steps inside: (1) session record + finance, (2) coach deductions,
+      // (3) player compensation. If any step fails the previous steps are
+      // rolled back automatically before the error is surfaced here.
+      const result = await orchestrateCancelSession({
+        branchId:      session.branchId,
+        date:          session.date,
+        fieldCost:     removeFieldCost ? 0 : sessionVal,
+        deductCoach,
+        extendPlayers,
+        branchDays:    branch?.days ?? [],
+        note,
+      });
+      if (!result.ok) throw new Error(result.error);
+
+      // Calendar event is created only after all DB operations succeed.
+      // compensated_player_ids stores the exact player IDs that received
+      // session compensation, enabling precise reversal on restore.
       const newEv = await createCalendarEvent({
-        branch_id:  session.branchId,
-        date:       session.date,
-        event_type: "canceled",
-        title:      `تدريب ملغي — ${session.branchName}`,
-        note:       removeFieldCost ? "تم إزالة تكلفة الملعب" : null,
+        branch_id:              session.branchId,
+        date:                   session.date,
+        event_type:             "canceled",
+        title:                  `تدريب ملغي — ${session.branchName}`,
+        note,
+        deduct_sessions:        extendPlayers,
+        compensated_player_ids: result.compensatedPlayerIds,
       });
       setEvents((prev) =>
         [...prev, newEv].sort((a, b) => a.date.localeCompare(b.date))
-      );
-      // Upsert session with field_cost = 0 if removed, else keep computed cost
-      upsertSession({
-        branch_id:  session.branchId,
-        date:       session.date,
-        status:     "cancelled",
-        field_cost: removeFieldCost ? 0 : sessionVal,
-        coach_cost: 0,
-        revenue:    0,
-        notes:      removeFieldCost ? "تم إزالة تكلفة الملعب" : null,
-      }).catch((e) =>
-        console.error("[calendar] session upsert error:", e)
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "خطأ في إلغاء الجلسة");
@@ -826,14 +984,13 @@ export default function CalendarPage() {
       let qualifying: DbPlayer[] = [];
 
       if (form.event_type === "training" && form.deductSessions && form.branch_id) {
-        qualifying = players.filter((p) => {
-          if (p.branch_id !== form.branch_id) return false;
-          if (p.is_paused) return false;
-          if (p.subscription_mode !== "حصص") return false;
-          if (p.start_date && p.start_date > form.date) return false;
-          if (!p.end_date) return true; // no end date = unlimited
-          return p.end_date >= form.date;
-        });
+        // isPlayerActiveOnDate is the single source of truth for subscription
+        // activity checks — same function used in the compensation path.
+        qualifying = players.filter((p) =>
+          p.branch_id === form.branch_id &&
+          p.subscription_mode === "حصص" &&
+          isPlayerActiveOnDate(p, form.date)
+        );
 
         const branch = branches.find((b) => b.id === form.branch_id);
         const branchJsDays = (branch?.days ?? [])
@@ -863,13 +1020,14 @@ export default function CalendarPage() {
       // Note: attendance records are NOT pre-created here — the date appears in the
       // attendance page via calendar events merge, and the admin marks present/absent manually.
 
-      // Deduct sessions only when the session day has already arrived.
-      // If the event is for a future date, deduction will NOT happen yet —
-      // the session will simply not be consumed until the day is reached
-      // (and if the event is deleted before that day, nothing needs restoring).
+      // Deduct sessions only when the session has fully ended (past the end time).
+      // Same-day future sessions (end time not yet reached) are NOT deducted yet —
+      // the session is still ongoing/upcoming and should not be consumed early.
+      // Future-date sessions are never deducted at creation time.
       if (willDeductSessions && qualifying.length > 0) {
         const todayStr = new Date().toISOString().slice(0, 10);
-        if (form.date <= todayStr) {
+        const branch   = branches.find((b) => b.id === form.branch_id);
+        if (sessionHasEnded(form.date, branch?.end_time, todayStr)) {
           // Optimistically update local player sessions count
           setPlayers((prev) =>
             prev.map((p) =>
@@ -921,11 +1079,13 @@ export default function CalendarPage() {
 
       // Restore sessions consumed by this extra training event, but only if:
       //   1. The event was flagged to deduct sessions (deduct_sessions = true)
-      //   2. The session day has already arrived (ev.date <= today)
-      //      — if deleted before the day, no deduction happened, nothing to restore
+      //   2. The session has fully ended (past end_time) — matching the exact
+      //      condition used when the deduction was originally applied.
+      //      If deleted before the session ended, no deduction happened → nothing to restore.
       if (ev && ev.event_type === "training" && ev.deduct_sessions && ev.branch_id) {
         const todayStr = new Date().toISOString().slice(0, 10);
-        if (ev.date <= todayStr) {
+        const branch   = branches.find((b) => b.id === ev.branch_id);
+        if (sessionHasEnded(ev.date, branch?.end_time, todayStr)) {
           const qualifying = players.filter((p) => {
             if (p.branch_id !== ev.branch_id) return false;
             if (p.is_paused) return false;
@@ -1021,6 +1181,9 @@ export default function CalendarPage() {
           branchName={pendingCancel.session.branchName}
           date={pendingCancel.session.date}
           sessionVal={pendingCancel.sessionVal}
+          isPerSession={pendingCancel.isPerSession}
+          affectedPlayersCount={pendingCancel.affectedPlayersCount}
+          affectedStaffCount={pendingCancel.affectedStaffCount}
           onConfirm={handleConfirmCancel}
           onDismiss={() => setPendingCancel(null)}
         />
@@ -1165,8 +1328,150 @@ export default function CalendarPage() {
           </span>
         </div>
 
-        {/* Calendar grid */}
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+        {/* ── Mobile: day-focused view (hidden on md+) ─────────────────── */}
+        <div className="md:hidden mt-4 space-y-3">
+          {/* Day navigation */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const prev = new Date(selectedDay + "T00:00:00");
+                prev.setDate(prev.getDate() - 1);
+                const prevISO = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+                if (prevISO >= firstOfMonth(selectedMonth)) setSelectedDay(prevISO);
+                else {
+                  const pm = prevMonthKey(selectedMonth);
+                  setSelectedMonth(pm);
+                  setSelectedDay(lastOfMonth(pm));
+                }
+              }}
+              className="h-10 w-10 shrink-0 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/10 transition"
+            >
+              ‹
+            </button>
+            <div className="flex-1 text-center">
+              <div className="text-sm font-bold text-white">
+                {WEEKDAY_LABELS[new Date(selectedDay + "T00:00:00").getDay()]}
+              </div>
+              <div className="text-xs text-white/50">
+                {Number(selectedDay.slice(8))} {ARABIC_MONTHS[selectedDay.slice(5, 7)]} {selectedDay.slice(0, 4)}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = new Date(selectedDay + "T00:00:00");
+                next.setDate(next.getDate() + 1);
+                const nextISO = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+                if (nextISO <= lastOfMonth(selectedMonth)) setSelectedDay(nextISO);
+                else {
+                  const nm = nextMonthKey(selectedMonth);
+                  setSelectedMonth(nm);
+                  setSelectedDay(firstOfMonth(nm));
+                }
+              }}
+              className="h-10 w-10 shrink-0 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/10 transition"
+            >
+              ›
+            </button>
+          </div>
+
+          {/* Events for selected day */}
+          {loading ? (
+            <div className="py-6 text-center text-sm text-white/50">جاري التحميل...</div>
+          ) : (
+            <>
+              {(sessionsByDate.get(selectedDay) ?? [])
+                .filter((s) => branchFilter === "all" || s.branchId === branchFilter)
+                .map((s) => {
+                  const key      = `${s.branchId}:${selectedDay}`;
+                  const canceled = canceledMap.has(key);
+                  const timeStr  = s.startTime
+                    ? `${formatTime(s.startTime)}${s.endTime ? `–${formatTime(s.endTime)}` : ""}`
+                    : "";
+                  return (
+                    <div
+                      key={key}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-xl px-4 py-3 border text-sm",
+                        canceled
+                          ? "text-red-300 bg-red-500/10 border-red-500/20"
+                          : getBranchColor(s.branchId)
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className={cn("font-semibold", canceled && "line-through opacity-70")}>
+                          {canceled ? "ملغي" : "تدريب"} — {s.branchName}
+                        </div>
+                        {timeStr && <div className="text-xs opacity-60 mt-0.5">{timeStr}</div>}
+                      </div>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCancel(s)}
+                          disabled={toggling === key}
+                          className={cn(
+                            "shrink-0 text-xs px-3 py-1.5 rounded-lg border transition",
+                            canceled
+                              ? "bg-emerald-400/15 border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/25"
+                              : "bg-red-500/15 border-red-500/30 text-red-300 hover:bg-red-500/25"
+                          )}
+                        >
+                          {toggling === key ? "..." : canceled ? "استعادة" : "إلغاء"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+              {(manualEventsByDate.get(selectedDay) ?? [])
+                .filter((ev) => branchFilter === "all" || ev.branch_id === branchFilter || !ev.branch_id)
+                .map((ev) => (
+                  <div
+                    key={ev.id}
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-xl px-4 py-3 border text-sm",
+                      eventTypeColor[ev.event_type]
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate">{ev.title}</div>
+                      {ev.note && <div className="text-xs opacity-60 mt-0.5 truncate">{ev.note}</div>}
+                    </div>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setModal({ type: "edit", event: ev })}
+                        className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-white/20 bg-white/10 text-white/70 hover:bg-white/15 transition"
+                      >
+                        تعديل
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+              {(sessionsByDate.get(selectedDay) ?? []).filter((s) => branchFilter === "all" || s.branchId === branchFilter).length === 0 &&
+               (manualEventsByDate.get(selectedDay) ?? []).filter((ev) => branchFilter === "all" || ev.branch_id === branchFilter || !ev.branch_id).length === 0 && (
+                <div className="py-8 text-center text-sm text-white/40 rounded-xl border border-white/5 bg-white/[0.02]">
+                  لا توجد جلسات أو أحداث لهذا اليوم
+                </div>
+              )}
+
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setModal({ type: "add", date: selectedDay })}
+                  className="w-full h-10 rounded-xl border border-dashed border-white/20 text-sm text-white/50 hover:border-[#63C0B0]/40 hover:text-[#63C0B0]/80 transition"
+                >
+                  + إضافة حدث لهذا اليوم
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Calendar grid (desktop only) */}
+        <div className="hidden md:block mt-4 overflow-x-auto rounded-2xl border border-white/10">
         <div className="min-w-[360px] bg-white/5 overflow-hidden rounded-2xl">
           {/* Weekday headers */}
           <div className="grid grid-cols-7 border-b border-white/10">
@@ -1285,7 +1590,7 @@ export default function CalendarPage() {
             </div>
           )}
         </div>{/* min-w */}
-        </div>{/* overflow-x-auto */}
+        </div>{/* overflow-x-auto / hidden md:block */}
 
         {/* Manual events list for this month */}
         {manualEventsFiltered.length > 0 && (

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { listPlayers,      type DbPlayer      } from "@/src/lib/supabase/players";
 import { listPayments,     type DbPayment      } from "@/src/lib/supabase/payments";
 import { listBranches,     type DbBranch       } from "@/src/lib/supabase/branches";
 import { listFinanceTx,    type DbFinanceTx    } from "@/src/lib/supabase/finance";
 import { listAttendanceByMonth                 } from "@/src/lib/supabase/attendance";
+import { upsertNotificationsFromInsights       } from "@/src/lib/supabase/notifications";
 import {
   computeInsights,
   type Insight,
@@ -88,9 +90,190 @@ function mapFinance(db: DbFinanceTx): InsightFinanceTx {
 type SeverityFilter = "all" | InsightSeverity;
 type ScopeFilter    = "all" | "academy" | "branch" | "player";
 
+// ── Action context (threaded from page to card without modifying computeInsights) ──
+
+type ActionContext = {
+  // Map of playerId → { phone, branchId }
+  playerMap: Map<string, { phone: string; branchId: string | null; end: string | null }>;
+  // List of players expiring within 7 days from today
+  expiringPlayers: Array<{ id: string; name: string; phone: string; end: string }>;
+};
+
+// ── Actionable buttons by insight type ───────────────────────────────────────
+
+function InsightActions({
+  insight,
+  ctx,
+}: {
+  insight: Insight;
+  ctx: ActionContext;
+}) {
+  const id = insight.id;
+
+  // ── Expiring subscriptions ─────────────────────────────────────────────────
+  if (id.startsWith("expiring-7d-")) {
+    return (
+      <div className="mt-4 space-y-2">
+        <div className="text-xs font-semibold text-white/50 mb-2">⚡ إجراءات سريعة</div>
+        {ctx.expiringPlayers.map((p) => (
+          <div key={p.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-white/90 truncate">{p.name}</div>
+              <div className="text-[10px] text-white/40 mt-0.5">
+                ينتهي {p.end.slice(8, 10)}/{p.end.slice(5, 7)}/{p.end.slice(0, 4)}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {p.phone && (
+                <a
+                  href={`https://wa.me/${p.phone.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded-lg bg-emerald-500/15 border border-emerald-400/25 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-500/25 transition"
+                >
+                  واتساب
+                </a>
+              )}
+              <Link
+                href={`/players?filter=ending7`}
+                className="rounded-lg bg-white/8 border border-white/10 px-2.5 py-1.5 text-[10px] text-white/70 hover:bg-white/15 transition"
+              >
+                عرض الكل
+              </Link>
+            </div>
+          </div>
+        ))}
+        {ctx.expiringPlayers.length === 0 && (
+          <Link
+            href="/players?filter=ending7"
+            className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-xs text-[#63C0B0] hover:bg-white/10 transition"
+          >
+            عرض اللاعبين المنتهية اشتراكاتهم قريباً ←
+          </Link>
+        )}
+      </div>
+    );
+  }
+
+  // ── Consecutive absences (player scope) ──────────────────────────────────
+  if (id.startsWith("abs-") && insight.scope.type === "player") {
+    const pid    = insight.scope.player_id;
+    const player = ctx.playerMap.get(pid);
+    const name   = insight.scope.player_name;
+    return (
+      <div className="mt-4 space-y-2">
+        <div className="text-xs font-semibold text-white/50 mb-2">⚡ إجراءات سريعة</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {player?.phone && (
+            <a
+              href={`https://wa.me/${player.phone.replace(/\D/g, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/25 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 transition"
+            >
+              <span>واتساب</span>
+              <span className="text-emerald-400/70">{name}</span>
+            </a>
+          )}
+          <Link
+            href={`/players?search=${encodeURIComponent(name)}`}
+            className="flex items-center gap-1.5 rounded-xl bg-white/8 border border-white/10 px-3 py-2 text-xs text-white/70 hover:bg-white/15 transition"
+          >
+            عرض اللاعب في القائمة
+          </Link>
+          <Link
+            href="/players/attendance"
+            className="flex items-center gap-1.5 rounded-xl bg-blue-500/10 border border-blue-400/20 px-3 py-2 text-xs text-blue-300 hover:bg-blue-500/20 transition"
+          >
+            سجل الحضور
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Low branch attendance ─────────────────────────────────────────────────
+  if (id.startsWith("low-attendance-") && insight.scope.type === "branch") {
+    const bid = insight.scope.branch_id;
+    return (
+      <div className="mt-4 space-y-2">
+        <div className="text-xs font-semibold text-white/50 mb-2">⚡ إجراءات سريعة</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href={`/players/attendance?branch=${bid}`}
+            className="flex items-center gap-1.5 rounded-xl bg-amber-500/15 border border-amber-400/25 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 transition"
+          >
+            عرض حضور الفرع
+          </Link>
+          <Link
+            href={`/calendar`}
+            className="flex items-center gap-1.5 rounded-xl bg-white/8 border border-white/10 px-3 py-2 text-xs text-white/70 hover:bg-white/15 transition"
+          >
+            جدول التدريبات
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Renewal rate drop ─────────────────────────────────────────────────────
+  if (id.startsWith("renewal-drop-")) {
+    return (
+      <div className="mt-4 space-y-2">
+        <div className="text-xs font-semibold text-white/50 mb-2">⚡ إجراءات سريعة</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/players?filter=expired"
+            className="flex items-center gap-1.5 rounded-xl bg-red-500/15 border border-red-400/25 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 transition"
+          >
+            اللاعبون المنتهية اشتراكاتهم
+          </Link>
+          <Link
+            href="/players?filter=ending7"
+            className="flex items-center gap-1.5 rounded-xl bg-amber-500/15 border border-amber-400/25 px-3 py-2 text-xs text-amber-300 hover:bg-amber-500/25 transition"
+          >
+            على وشك الانتهاء
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Revenue drop ──────────────────────────────────────────────────────────
+  if (id.startsWith("revenue-drop-")) {
+    return (
+      <div className="mt-4 space-y-2">
+        <div className="text-xs font-semibold text-white/50 mb-2">⚡ إجراءات سريعة</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/finance"
+            className="flex items-center gap-1.5 rounded-xl bg-[#63C0B0]/15 border border-[#63C0B0]/25 px-3 py-2 text-xs font-semibold text-[#63C0B0] hover:bg-[#63C0B0]/25 transition"
+          >
+            الإدارة المالية
+          </Link>
+          <Link
+            href="/players?filter=expired"
+            className="flex items-center gap-1.5 rounded-xl bg-white/8 border border-white/10 px-3 py-2 text-xs text-white/70 hover:bg-white/15 transition"
+          >
+            اللاعبون غير المجددين
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ── InsightCard ───────────────────────────────────────────────────────────────
 
-function InsightCard({ insight }: { insight: Insight }) {
+function InsightCard({
+  insight,
+  ctx,
+}: {
+  insight: Insight;
+  ctx: ActionContext;
+}) {
   const [expanded, setExpanded] = useState(false);
   const s = severityStyles[insight.severity];
 
@@ -144,6 +327,9 @@ function InsightCard({ insight }: { insight: Insight }) {
         {insight.description}
       </p>
 
+      {/* Action buttons — always visible for actionable insights */}
+      <InsightActions insight={insight} ctx={ctx} />
+
       {expanded && (
         <div className="mt-4 space-y-3">
           <div>
@@ -188,6 +374,9 @@ export default function InsightsPage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
 
+  // Raw DB players for action context (phone numbers, etc.)
+  const [dbPlayersRaw, setDbPlayersRaw] = useState<DbPlayer[]>([]);
+
   const [players,    setPlayers]    = useState<InsightPlayer[]>([]);
   const [payments,   setPayments]   = useState<InsightPayment[]>([]);
   const [branches,   setBranches]   = useState<InsightBranch[]>([]);
@@ -204,13 +393,27 @@ export default function InsightsPage() {
       setLoading(true);
       setError(null);
       try {
+        const last6: string[] = [];
+        {
+          let cur = monthKey(todayISO());
+          for (let i = 0; i < 6; i++) {
+            last6.push(cur);
+            const [y, m] = cur.split("-").map(Number);
+            const d = new Date(y, m - 1, 1);
+            d.setMonth(d.getMonth() - 1);
+            cur = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          }
+        }
+
         const [dbPlayers, dbPayments, dbBranches, dbFinance] = await Promise.all([
           listPlayers(),
           listPayments(),
           listBranches(),
-          listFinanceTx(),
+          listFinanceTx(last6),
         ]);
         if (cancelled) return;
+
+        setDbPlayersRaw(dbPlayers);
         setPlayers(dbPlayers.map(mapPlayer));
         setPayments(dbPayments.map(mapPayment));
         setBranches(dbBranches.map(mapBranch));
@@ -241,7 +444,7 @@ export default function InsightsPage() {
           }))
         );
       } catch {
-        // attendance data is best-effort — don't block insights
+        // attendance is best-effort — don't block insights
       }
     };
     load();
@@ -260,6 +463,35 @@ export default function InsightsPage() {
       today: todayISO(),
     });
   }, [players, payments, attendance, branches, finance, selectedMonth, loading]);
+
+  // Sync critical+warning insights to notifications DB (once per insight set)
+  useEffect(() => {
+    if (loading || insights.length === 0) return;
+    upsertNotificationsFromInsights(insights).catch(() => {});
+  }, [insights, loading]);
+
+  // Action context — computed in parallel with insights, without touching computeInsights
+  const actionCtx = useMemo<ActionContext>(() => {
+    const playerMap = new Map<string, { phone: string; branchId: string | null; end: string | null }>();
+    for (const p of dbPlayersRaw) {
+      playerMap.set(p.id, { phone: p.phone, branchId: p.branch_id, end: p.end_date });
+    }
+
+    const todayStr = todayISO();
+    const todayDate = new Date(todayStr);
+    const in7 = new Date(todayStr);
+    in7.setDate(in7.getDate() + 7);
+
+    const expiringPlayers = dbPlayersRaw
+      .filter((p) => {
+        if (!p.end_date || p.is_paused) return false;
+        const endDate = new Date(p.end_date);
+        return endDate >= todayDate && endDate <= in7;
+      })
+      .map((p) => ({ id: p.id, name: p.name, phone: p.phone, end: p.end_date! }));
+
+    return { playerMap, expiringPlayers };
+  }, [dbPlayersRaw]);
 
   const filtered = useMemo(() => {
     return insights.filter((ins) => {
@@ -413,7 +645,9 @@ export default function InsightsPage() {
               لا توجد تنبيهات تطابق الفلتر المحدد
             </div>
           ) : (
-            filtered.map((ins) => <InsightCard key={ins.id} insight={ins} />)
+            filtered.map((ins) => (
+              <InsightCard key={ins.id} insight={ins} ctx={actionCtx} />
+            ))
           )}
 
           {insights.length === 0 && (

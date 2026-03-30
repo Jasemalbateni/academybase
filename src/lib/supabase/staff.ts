@@ -41,7 +41,7 @@ export async function listStaff(): Promise<DbStaff[]> {
     .eq("academy_id", academyId)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) throw new Error(`${error.message} [${error.code}]`);
   return (data ?? []) as DbStaff[];
 }
 
@@ -55,7 +55,7 @@ export async function createStaffMember(payload: StaffInsert): Promise<DbStaff> 
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(`${error.message} [${error.code}]`);
   return data as DbStaff;
 }
 
@@ -72,12 +72,12 @@ export async function updateStaffMember(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(`${error.message} [${error.code}]`);
   return data as DbStaff;
 }
 
 export async function deleteStaffMember(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("staff").delete().eq("id", id);
-  if (error) throw error;
+  if (error) throw new Error(`${error.message} [${error.code}]`);
 }

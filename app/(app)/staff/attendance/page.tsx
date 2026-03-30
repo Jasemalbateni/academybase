@@ -18,24 +18,7 @@ import {
   type DbStaffSubstitute,
 } from "@/src/lib/supabase/staff-substitutes";
 import { upsertAutoFinanceTx } from "@/src/lib/supabase/finance";
-
-// ── Error helper ──────────────────────────────────────────────────────────────
-
-function formatError(e: unknown): string {
-  if (!e) return "خطأ غير محدد";
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object") {
-    const pg = e as Record<string, unknown>;
-    const parts: string[] = [];
-    if (pg.message) parts.push(`message: ${pg.message}`);
-    if (pg.code)    parts.push(`code: ${pg.code}`);
-    if (pg.details) parts.push(`details: ${pg.details}`);
-    if (pg.hint)    parts.push(`hint: ${pg.hint}`);
-    if (parts.length) return parts.join(" | ");
-    return JSON.stringify(e);
-  }
-  return String(e);
-}
+import { formatError } from "@/src/lib/utils";
 
 // ── Arabic / Date helpers ─────────────────────────────────────────────────────
 
@@ -121,11 +104,12 @@ const STATUS_OPTIONS: AttendanceStatus[] = [
 
 function statusColor(s: AttendanceStatus): string {
   switch (s) {
-    case "present":  return "bg-emerald-400/15 text-emerald-300 border-emerald-400/25";
-    case "late":     return "bg-amber-400/15 text-amber-300 border-amber-400/25";
-    case "absent":   return "bg-red-500/15 text-red-300 border-red-500/25";
-    case "vacation": return "bg-blue-400/15 text-blue-300 border-blue-400/25";
-    case "excused":  return "bg-purple-400/15 text-purple-300 border-purple-400/25";
+    case "present":     return "bg-emerald-400/15 text-emerald-300 border-emerald-400/25";
+    case "late":        return "bg-amber-400/15 text-amber-300 border-amber-400/25";
+    case "absent":      return "bg-red-500/15 text-red-300 border-red-500/25";
+    case "vacation":    return "bg-blue-400/15 text-blue-300 border-blue-400/25";
+    case "excused":     return "bg-purple-400/15 text-purple-300 border-purple-400/25";
+    case "no_training": return "bg-slate-400/15 text-slate-300 border-slate-400/25";
   }
 }
 
@@ -351,7 +335,10 @@ export default function StaffAttendancePage() {
     return new Map(
       slots.map(({ staff: s, branch: b }) => [
         rowKey(s.id, b.id),
-        computeSessionDeduction(Number(s.monthly_salary), y, m, b.days ?? []),
+        computeSessionDeduction(
+          Number(s.monthly_salary), y, m, b.days ?? [],
+          Math.max(1, (s.branch_ids ?? []).length)
+        ),
       ])
     );
   }, [slots, selectedDate]);

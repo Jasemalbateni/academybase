@@ -10,10 +10,13 @@ import {
   updateBranch,
   deleteBranch,
 } from "@/src/lib/supabase/branches";
+import { listStaff, updateStaffMember } from "@/src/lib/supabase/staff";
 import { Button } from "@/app/components/ui/Button";
+import { Modal } from "@/app/components/ui/Modal";
 import { type AcademyDiag, diagnoseAcademy } from "@/src/lib/supabase/academyId";
 import { getMembership, isOwnerOrPartner } from "@/src/lib/supabase/roles";
 import { createClient } from "@/src/lib/supabase/browser";
+import { formatError } from "@/src/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -37,26 +40,6 @@ const WEEKDAYS: Weekday[] = [
 ];
 
 type SubscriptionMode = "حصص" | "شهري";
-
-// ── Error formatting ───────────────────────────────────────────────────────────
-// Supabase throws PostgrestError (plain object, NOT instanceof Error).
-// This helper extracts every useful field from any error shape.
-
-function formatError(e: unknown): string {
-  if (!e) return "خطأ غير محدد";
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object") {
-    const pg = e as Record<string, unknown>;
-    const parts: string[] = [];
-    if (pg.message)  parts.push(`message: ${pg.message}`);
-    if (pg.code)     parts.push(`code: ${pg.code}`);
-    if (pg.details)  parts.push(`details: ${pg.details}`);
-    if (pg.hint)     parts.push(`hint: ${pg.hint}`);
-    if (parts.length) return parts.join(" | ");
-    return JSON.stringify(e);
-  }
-  return String(e);
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -232,6 +215,24 @@ export default function BranchesPage() {
       if (mode === "create") {
         const created = await createBranch(payload);
         setBranches((prev) => [created, ...prev]);
+        // Sync staff with assign_mode="all": add new branch to their branch_ids
+        // so Finance sync and session deductions include them immediately.
+        listStaff().then((staffList) => {
+          const allModeStaff = staffList.filter(
+            (s) => s.assign_mode === "all" && s.is_active
+          );
+          Promise.all(
+            allModeStaff
+              .filter((s) => !s.branch_ids.includes(created.id))
+              .map((s) =>
+                updateStaffMember(s.id, {
+                  branch_ids: [...s.branch_ids, created.id],
+                })
+              )
+          ).catch((e) =>
+            console.error("[branches] failed to sync all-mode staff for new branch:", e)
+          );
+        }).catch(() => null);
       } else {
         if (!editId) return;
         const updated = await updateBranch(editId, payload);
@@ -256,6 +257,21 @@ export default function BranchesPage() {
     try {
       await deleteBranch(id);
       setBranches((prev) => prev.filter((b) => b.id !== id));
+      // Sync staff with assign_mode="all": remove deleted branch from their branch_ids
+      listStaff().then((staffList) => {
+        const allModeStaff = staffList.filter((s) => s.assign_mode === "all");
+        Promise.all(
+          allModeStaff
+            .filter((s) => s.branch_ids.includes(id))
+            .map((s) =>
+              updateStaffMember(s.id, {
+                branch_ids: s.branch_ids.filter((bid) => bid !== id),
+              })
+            )
+        ).catch((e) =>
+          console.error("[branches] failed to sync all-mode staff on branch delete:", e)
+        );
+      }).catch(() => null);
     } catch (e: unknown) {
       console.error("[branches] delete error:", e);
       setPageError(formatError(e));
@@ -356,7 +372,50 @@ export default function BranchesPage() {
 
           {/* Table */}
           <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-            <div className="overflow-x-auto">
+
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-white/[0.07]">
+              {loading ? (
+                <div className="px-4 py-4 space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-24 rounded-xl bg-white/[0.04] animate-pulse" />
+                  ))}
+                </div>
+              ) : branches.length === 0 ? (
+                <div className="px-4 py-6 text-white/60 text-sm text-center">
+                  لا يوجد فروع بعد. اضغط &quot;إضافة فرع&quot;.
+                </div>
+              ) : (
+                branches.map((b) => (
+                  <div key={b.id} className="px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-white">{b.name}</div>
+                        <div className="mt-1 text-xs text-white/55 space-y-0.5">
+                          <div>{b.days.join("، ")}</div>
+                          <div>{b.start_time} - {b.end_time}</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-bold text-[#63C0B0]">{b.price} د.ك</div>
+                        <div className="text-xs text-white/40 mt-0.5">{b.subscription_mode}</div>
+                      </div>
+                    </div>
+                    {canManageBranches ? (
+                      <div className="mt-3 flex gap-2">
+                        <Button variant="ghost" size="xs" onClick={() => openEdit(b)}>تعديل</Button>
+                        <Button variant="danger" size="xs" onClick={() => removeBranch(b.id)}>حذف</Button>
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-xs text-white/30">قراءة فقط</div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-white/5 text-white/70">
                   <tr>
@@ -432,12 +491,11 @@ export default function BranchesPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </div>{/* hidden md:block */}
           </div>
 
           {/* Modal */}
-          {open && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <Modal open={open} onClose={() => setOpen(false)}>
               <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#0e1730] p-5 shadow-xl max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold">
@@ -632,8 +690,7 @@ export default function BranchesPage() {
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+          </Modal>
         </main>
   );
 }

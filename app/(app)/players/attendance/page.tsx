@@ -10,22 +10,7 @@ import {
 import { listPaymentPeriods, type PaymentPeriod } from "@/src/lib/supabase/payments";
 import { listCalendarEvents } from "@/src/lib/supabase/calendar";
 import { createClient } from "@/lib/supabase/browser";
-
-// ── Error helper ──────────────────────────────────────────────────────────────
-
-function formatError(e: unknown): string {
-  if (!e) return "خطأ غير محدد";
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object") {
-    const pg = e as Record<string, unknown>;
-    const parts: string[] = [];
-    if (pg.message) parts.push(`message: ${pg.message}`);
-    if (pg.code)    parts.push(`code: ${pg.code}`);
-    if (pg.details) parts.push(`details: ${pg.details}`);
-    return parts.length ? parts.join(" | ") : JSON.stringify(e);
-  }
-  return String(e);
-}
+import { formatError } from "@/src/lib/utils";
 
 // ── Arabic day mapping ────────────────────────────────────────────────────────
 // JavaScript getDay(): 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat

@@ -8,14 +8,16 @@ export type AttendanceStatus =
   | "late"
   | "absent"
   | "vacation"
-  | "excused";
+  | "excused"
+  | "no_training";
 
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
-  present:  "حاضر",
-  late:     "متأخر",
-  absent:   "غائب",
-  vacation: "إجازة",
-  excused:  "بعذر",
+  present:     "حاضر",
+  late:        "متأخر",
+  absent:      "غائب",
+  vacation:    "إجازة",
+  excused:     "بعذر",
+  no_training: "لا يوجد تمرين",
 };
 
 export type DbStaffAttendance = {
@@ -75,19 +77,26 @@ export function countSessionsInMonth(
 
 /**
  * Compute deduction amount for one session:
- *   salary / sessions_in_month
+ *   (salary / branchCount) / sessions_in_month
+ *
+ * branchCount defaults to 1 (single-branch staff).
+ * For multi-branch staff, pass the number of branches so the per-branch
+ * share is deducted, not the full salary.
+ *
  * Returns 0 if salary or sessions cannot be determined.
  */
 export function computeSessionDeduction(
   monthlySalary: number,
   year:          number,
   month:         number,
-  branchDays:    string[]
+  branchDays:    string[],
+  branchCount?:  number
 ): number {
   if (!monthlySalary || monthlySalary <= 0) return 0;
   const sessionCount = countSessionsInMonth(year, month, branchDays);
   if (sessionCount <= 0) return 0;
-  return Math.round((monthlySalary / sessionCount) * 100) / 100;
+  const bCount = Math.max(1, branchCount ?? 1);
+  return Math.round(((monthlySalary / bCount) / sessionCount) * 100) / 100;
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -194,4 +203,42 @@ export async function deleteStaffAttendance(id: string): Promise<void> {
     .delete()
     .eq("id", id);
   if (error) throw new Error(`${error.message} [${error.code}]`);
+}
+
+/**
+ * Mark all active staff assigned to a branch as "no_training" for a given date.
+ * Used when a training session is cancelled and the user opts to remove the
+ * coach salary deduction. Sets deduct_from_salary=false so the Finance
+ * auto-sync does not count this as an absence.
+ *
+ * Safe to call even if no staff are assigned — returns silently.
+ */
+export async function markNoTrainingForBranch(
+  branchId: string,
+  date:     string
+): Promise<void> {
+  const supabase  = createClient();
+  const academyId = await resolveAcademyId();
+
+  // Find all active staff assigned to this branch
+  const { data: staffList } = await supabase
+    .from("staff")
+    .select("id")
+    .eq("academy_id", academyId)
+    .eq("is_active", true)
+    .contains("branch_ids", [branchId]);
+
+  if (!staffList?.length) return;
+
+  const records: StaffAttendanceInsert[] = staffList.map((s: { id: string }) => ({
+    staff_id:           s.id,
+    branch_id:          branchId,
+    date,
+    status:             "no_training",
+    deduct_from_salary: false,
+    deduction_amount:   0,
+    notes:              "حصة ملغاة — لا يوجد تمرين",
+  }));
+
+  await bulkUpsertStaffAttendance(records);
 }

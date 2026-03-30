@@ -1,1156 +1,99 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/app/components/ui/Button";
+import { Skeleton } from "@/app/components/Skeleton";
+import { isoToDDMMYYYY } from "@/src/lib/utils";
 import {
-  type DbPlayer,
-  listPlayers,
-  createPlayer,
-  updatePlayer,
-  deletePlayer,
-  pausePlayer,
-  resumePlayer,
-} from "@/src/lib/supabase/players";
+  statusStyles,
+  EVENT_CONFIG,
+  FILTER_BUTTONS,
+  type SubscriptionMode,
+} from "./_types";
 import {
-  createPayment,
-  updatePayment,
-  listPlayerPayments,
-  type DbPayment,
-} from "@/src/lib/supabase/payments";
-import {
-  type DbBranch,
-  listBranches,
-} from "@/src/lib/supabase/branches";
-import {
-  createSubscriptionEvent,
-  listSubscriptionEvents,
-  type DbSubscriptionEvent,
-  type SubscriptionEventType,
-} from "@/src/lib/supabase/subscription-events";
-
-// ── Error helper ──────────────────────────────────────────────────────────────
-function formatError(e: unknown): string {
-  if (!e) return "خطأ غير محدد";
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object") {
-    const pg = e as Record<string, unknown>;
-    const parts: string[] = [];
-    if (pg.message) parts.push(`message: ${pg.message}`);
-    if (pg.code)    parts.push(`code: ${pg.code}`);
-    if (pg.details) parts.push(`details: ${pg.details}`);
-    if (pg.hint)    parts.push(`hint: ${pg.hint}`);
-    if (parts.length) return parts.join(" | ");
-    return JSON.stringify(e);
-  }
-  return String(e);
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-type Status = "نشط" | "قريب" | "منتهي" | "تجميد";
-type SubscriptionMode = "حصص" | "شهري";
-type FilterKey = "all" | "active" | "ending7" | "expired";
-type ModalType = "add" | "edit" | "renew" | "extend" | "history";
-
-type Player = {
-  id: string;
-  academy_id: string;
-  name: string;
-  birth: string;
-  phone: string;
-  branchId: string | null;
-  subscriptionMode: SubscriptionMode;
-  sessions: number;
-  price: number;
-  start: string;    // DD/MM/YYYY
-  end: string;      // DD/MM/YYYY or "—"
-  isLegacy: boolean;
-  isPaused: boolean;
-};
-
-// ── Date conversion helpers ───────────────────────────────────────────────────
-function isoToDDMMYYYY(iso: string): string {
-  const parts = iso.split("-");
-  if (parts.length !== 3) return iso;
-  const [yyyy, mm, dd] = parts;
-  return `${dd}/${mm}/${yyyy}`;
-}
-function ddmmyyyyToISO(ddmmyyyy: string): string {
-  const parts = ddmmyyyy.split("/");
-  if (parts.length !== 3) return "";
-  const [dd, mm, yyyy] = parts;
-  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-}
-function dbToPlayer(db: DbPlayer): Player {
-  return {
-    id: db.id,
-    academy_id: db.academy_id,
-    name: db.name,
-    birth: db.birth,
-    phone: db.phone,
-    branchId: db.branch_id,
-    subscriptionMode: db.subscription_mode as SubscriptionMode,
-    sessions: db.sessions,
-    price: Number(db.price),
-    start: db.start_date ? isoToDDMMYYYY(db.start_date) : "—",
-    end: db.end_date ? isoToDDMMYYYY(db.end_date) : "—",
-    isLegacy: db.is_legacy,
-    isPaused: db.is_paused ?? false,
-  };
-}
-
-// ── Branch mapping ────────────────────────────────────────────────────────────
-type BranchLite = {
-  id: string;
-  name: string;
-  price: number;
-  days: string[];
-  subscriptionMode: SubscriptionMode;
-};
-function dbToBranchLite(db: DbBranch): BranchLite {
-  return {
-    id: db.id,
-    name: db.name,
-    price: db.price,
-    days: db.days,
-    subscriptionMode: db.subscription_mode as SubscriptionMode,
-  };
-}
-
-// ── UI Helpers ────────────────────────────────────────────────────────────────
-const statusStyles: Record<Status, string> = {
-  نشط:   "bg-green-500/15 text-green-400",
-  قريب:  "bg-amber-500/15 text-amber-300",
-  منتهي: "bg-red-500/15 text-red-400",
-  تجميد: "bg-blue-500/15 text-blue-400",
-};
-
-// ── Date calculation helpers ──────────────────────────────────────────────────
-function isoToDate(iso: string) {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-function dateToISO(d: Date) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-function ddmmyyyyToDate(ddmmyyyy: string) {
-  const parts = ddmmyyyy.split("/");
-  if (parts.length !== 3) return null;
-  const [dd, mm, yyyy] = parts.map(Number);
-  if (!dd || !mm || !yyyy) return null;
-  const d = new Date(yyyy, mm - 1, dd);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-function formatDDMMYYYYFromDate(d: Date) {
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${d.getFullYear()}`;
-}
-function addDays(date: Date, days: number) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-function addMonthsClamped(date: Date, months: number) {
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const day = date.getDate();
-  const targetFirst = new Date(y, m + months, 1);
-  const lastDay = new Date(
-    targetFirst.getFullYear(),
-    targetFirst.getMonth() + 1,
-    0
-  ).getDate();
-  return new Date(
-    targetFirst.getFullYear(),
-    targetFirst.getMonth(),
-    Math.min(day, lastDay)
-  );
-}
-
-// ── Days map ──────────────────────────────────────────────────────────────────
-const AR_DAY_TO_JS: Record<string, number> = {
-  الأحد: 0,
-  الاثنين: 1,
-  "الإثنين": 1,
-  الثلاثاء: 2,
-  الأربعاء: 3,
-  الخميس: 4,
-  الجمعة: 5,
-  السبت: 6,
-};
-
-// ── End date computation ──────────────────────────────────────────────────────
-function computeMonthlyEnd(startISO: string): string {
-  const start = isoToDate(startISO);
-  return formatDDMMYYYYFromDate(addDays(addMonthsClamped(start, 1), -1));
-}
-function computeMonthlyEndISO(startISO: string): string {
-  return ddmmyyyyToISO(computeMonthlyEnd(startISO));
-}
-function computeSessionsEnd(
-  startISO: string,
-  branchDays: string[],
-  sessions: number
-): string {
-  const start = isoToDate(startISO);
-  const dayNums = new Set<number>(
-    branchDays.map((d) => AR_DAY_TO_JS[d]).filter((n) => typeof n === "number")
-  );
-  if (dayNums.size === 0 || !Number.isFinite(sessions) || sessions <= 0)
-    return "—";
-  let count = 0;
-  let cursor = new Date(start);
-  for (let i = 0; i < 365; i++) {
-    if (dayNums.has(cursor.getDay())) {
-      count += 1;
-      if (count === sessions) return formatDDMMYYYYFromDate(cursor);
-    }
-    cursor = addDays(cursor, 1);
-  }
-  return "—";
-}
-function computeSessionsEndISO(
-  startISO: string,
-  branchDays: string[],
-  sessions: number
-): string | null {
-  const ddmm = computeSessionsEnd(startISO, branchDays, sessions);
-  return ddmm === "—" ? null : ddmmyyyyToISO(ddmm);
-}
-
-/**
- * Compute new end_date after extending by `count` units.
- * - حصص mode: counts `count` training days from the day after currentEnd.
- * - شهري mode: adds `count` calendar days.
- */
-function computeExtendEndISO(
-  currentEndDDMMYYYY: string,
-  mode: SubscriptionMode,
-  branchDays: string[],
-  count: number
-): string | null {
-  const endDate = ddmmyyyyToDate(currentEndDDMMYYYY);
-  if (!endDate) return null;
-
-  if (mode === "شهري") {
-    return dateToISO(addDays(endDate, count));
-  }
-
-  // حصص: count N training sessions starting from day after end
-  const startFrom = addDays(endDate, 1);
-  const dayNums = new Set<number>(
-    branchDays.map((d) => AR_DAY_TO_JS[d]).filter((n) => typeof n === "number")
-  );
-  if (dayNums.size === 0 || count <= 0) return null;
-  let sessionCount = 0;
-  let cursor = new Date(startFrom);
-  for (let i = 0; i < 730; i++) {
-    if (dayNums.has(cursor.getDay())) {
-      sessionCount++;
-      if (sessionCount === count) return dateToISO(cursor);
-    }
-    cursor = addDays(cursor, 1);
-  }
-  return null;
-}
-
-// ── Remaining sessions (estimated) ───────────────────────────────────────────
-function countUsedSessionsSinceStart(
-  startDDMMYYYY: string,
-  branchDays: string[]
-): number {
-  const startISO = ddmmyyyyToISO(startDDMMYYYY);
-  const start = isoToDate(startISO);
-  const dayNums = new Set<number>(
-    branchDays.map((d) => AR_DAY_TO_JS[d]).filter((n) => typeof n === "number")
-  );
-  if (dayNums.size === 0) return 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const cursor = new Date(start);
-  cursor.setHours(0, 0, 0, 0);
-  let used = 0;
-  for (let i = 0; i < 365; i++) {
-    if (cursor.getTime() > today.getTime()) break;
-    if (dayNums.has(cursor.getDay())) used += 1;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return used;
-}
-function remainingSessions(
-  p: Player,
-  branch?: BranchLite
-): number | null {
-  if (p.subscriptionMode !== "حصص") return null;
-  const total = Number(p.sessions || 0);
-  if (!Number.isFinite(total) || total <= 0) return 0;
-  if (!branch || !branch.days?.length) return total;
-  const used = countUsedSessionsSinceStart(p.start, branch.days);
-  return Math.max(0, total - Math.min(total, used));
-}
-
-// ── Status helpers ────────────────────────────────────────────────────────────
-function daysUntilEnd(end: string): number | null {
-  if (!end || end === "—") return null;
-  const endDate = ddmmyyyyToDate(end);
-  if (!endDate) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  endDate.setHours(0, 0, 0, 0);
-  return Math.floor((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-function calcStatusFromEnd(end: string, isPaused = false): Status {
-  if (isPaused) return "تجميد";
-  const diff = daysUntilEnd(end);
-  if (diff === null) return "نشط";
-  if (diff < 0) return "منتهي";
-  if (diff <= 7) return "قريب";
-  return "نشط";
-}
-
-// ── Duplicate check ───────────────────────────────────────────────────────────
-function normalizeName(s: string) {
-  return (s || "").trim().toLowerCase();
-}
-function findExistingPlayer(
-  players: Player[],
-  candidate: { name: string; birth: string },
-  excludeId?: string
-) {
-  const cName = normalizeName(candidate.name);
-  const cBirth = String(candidate.birth || "").trim();
-  return players.find(
-    (p) =>
-      p.id !== excludeId &&
-      normalizeName(p.name) === cName &&
-      String(p.birth || "").trim() === cBirth
-  );
-}
-
-// ── Event type config (Feature F) ────────────────────────────────────────────
-const EVENT_CONFIG: Record<SubscriptionEventType, { label: string; color: string }> = {
-  first_registration: { label: "أول تسجيل",           color: "bg-green-500/15 text-green-300 border-green-500/30" },
-  renewal:            { label: "تجديد",                color: "bg-teal-500/15 text-teal-300 border-teal-500/30" },
-  extension:          { label: "تمديد",                color: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-  paused:             { label: "تجميد الاشتراك",        color: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-  resumed:            { label: "استئناف الاشتراك",     color: "bg-green-500/15 text-green-300 border-green-500/30" },
-  expired:            { label: "انتهى الاشتراك",       color: "bg-red-500/15 text-red-300 border-red-500/30" },
-  returned:           { label: "تجديد",                color: "bg-teal-500/15 text-teal-300 border-teal-500/30" },
-};
-
-/**
- * Build a synthetic event timeline from payment records.
- * Used as history fallback when subscription_events table is empty for a player.
- */
-function buildSyntheticHistory(payments: DbPayment[]): DbSubscriptionEvent[] {
-  if (!payments.length) return [];
-  const sorted = [...payments].sort((a, b) => a.date.localeCompare(b.date));
-  const events: DbSubscriptionEvent[] = [];
-
-  for (let i = 0; i < sorted.length; i++) {
-    const pmt = sorted[i];
-    const eventType: SubscriptionEventType = i === 0 ? "first_registration" : "renewal";
-    events.push({
-      id: `synth-${pmt.id}-${eventType}`,
-      academy_id: "",
-      player_id: pmt.player_id,
-      event_type: eventType,
-      event_date: pmt.date,
-      extend_days: null,
-      payment_id: pmt.id,
-      note: pmt.subscription_end ? `ينتهي في: ${isoToDDMMYYYY(pmt.subscription_end)}` : null,
-      created_by: null,
-      created_at: pmt.created_at,
-    });
-
-    // Insert "expired" event between renewals when there's a gap > 1 day
-    const nextPmt = sorted[i + 1];
-    if (pmt.subscription_end && nextPmt) {
-      const endDate = isoToDate(pmt.subscription_end);
-      const nextStart = isoToDate(nextPmt.date);
-      endDate.setHours(0, 0, 0, 0);
-      nextStart.setHours(0, 0, 0, 0);
-      const gapDays = Math.round((nextStart.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (gapDays > 1) {
-        events.push({
-          id: `synth-${pmt.id}-expired`,
-          academy_id: "",
-          player_id: pmt.player_id,
-          event_type: "expired",
-          event_date: pmt.subscription_end,
-          extend_days: null,
-          payment_id: null,
-          note: null,
-          created_by: null,
-          created_at: pmt.created_at,
-        });
-      }
-    }
-  }
-
-  // Add final "expired" event if the last subscription has already ended
-  const lastPmt = sorted[sorted.length - 1];
-  const todayStr = new Date().toISOString().slice(0, 10);
-  if (lastPmt?.subscription_end && lastPmt.subscription_end < todayStr) {
-    const lastEv = events[events.length - 1];
-    if (!lastEv || lastEv.event_type !== "expired") {
-      events.push({
-        id: `synth-${lastPmt.id}-expired-final`,
-        academy_id: "",
-        player_id: lastPmt.player_id,
-        event_type: "expired",
-        event_date: lastPmt.subscription_end,
-        extend_days: null,
-        payment_id: null,
-        note: null,
-        created_by: null,
-        created_at: lastPmt.created_at,
-      });
-    }
-  }
-
-  return events;
-}
+  calcStatusFromEnd,
+  remainingSessions,
+  computeExtendEndISO,
+} from "./_utils";
+import { usePlayersPage } from "./_usePlayersPage";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function PlayersPage() {
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [branches, setBranches] = useState<BranchLite[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  // Filters
-  const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [branchFilter, setBranchFilter] = useState<string>("all");
-
-  // Modal
-  const [open, setOpen] = useState(false);
-  const [modalType, setModalType] = useState<ModalType>("add");
-  const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
-
-  // Form fields
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const [name, setName] = useState("");
-  const [birth, setBirth] = useState("");
-  const [phone, setPhone] = useState("");
-  const [branchId, setBranchId] = useState<string>("");
-  const [startDate, setStartDate] = useState(todayISO);
-  const [startDateText, setStartDateText] = useState(() =>
-    isoToDDMMYYYY(new Date().toISOString().slice(0, 10))
-  );
-  const [subscriptionMode, setSubscriptionMode] = useState<SubscriptionMode>("حصص");
-  const [sessionsInput, setSessionsInput] = useState<string>("12");
-  const [priceInput, setPriceInput] = useState<string>("0");
-  const [isLegacy, setIsLegacy] = useState(false);
-
-  // Feature B: Extend
-  const [extendDays, setExtendDays] = useState<number>(7);
-
-  // Fix 6: Preserve extended end_date when editing (only recompute if sub params changed)
-  const [originalEndDateISO, setOriginalEndDateISO] = useState<string | null>(null);
-  const [originalSubParams, setOriginalSubParams] = useState<{
-    startDate: string; mode: SubscriptionMode; branchId: string; sessions: number;
-  } | null>(null);
-
-  // Feature C: Pause toggle
-  const [pauseToggling, setPauseToggling] = useState<string | null>(null);
-
-  // Feature D: Bulk selection
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkExtendDays, setBulkExtendDays] = useState<number>(7);
-  const [bulkConfirm, setBulkConfirm] = useState<"extend" | "delete" | null>(null);
-  const [bulkProcessing, setBulkProcessing] = useState(false);
-
-  // Feature F: History
-  const [historyEvents, setHistoryEvents] = useState<DbSubscriptionEvent[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyPlayerName, setHistoryPlayerName] = useState<string>("");
-
-  // ── Load on mount ──────────────────────────────────────────────────────────
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setPageError(null);
-    try {
-      const [dbPlayers, dbBranches] = await Promise.all([
-        listPlayers(),
-        listBranches(),
-      ]);
-      setPlayers(dbPlayers.map(dbToPlayer));
-      setBranches(dbBranches.map(dbToBranchLite));
-    } catch (e) {
-      console.error("[players] load error:", e);
-      setPageError(formatError(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // ── Derived: branch map ────────────────────────────────────────────────────
-  const branchMap = useMemo(() => {
-    const m = new Map<string, BranchLite>();
-    branches.forEach((b) => m.set(b.id, b));
-    return m;
-  }, [branches]);
-
-  const selectedBranch = branchId ? branchMap.get(branchId) : undefined;
-
-  // ── Apply branch settings to form ─────────────────────────────────────────
-  function applyBranchSettings(
-    newBranchId: string,
-    opts?: { keepPrice?: boolean; keepSessions?: boolean }
-  ) {
-    setBranchId(newBranchId);
-    const b = branchMap.get(newBranchId);
-    if (!b) return;
-    setSubscriptionMode(b.subscriptionMode ?? "حصص");
-    if (!opts?.keepPrice) setPriceInput(String(b.price ?? 0));
-    if ((b.subscriptionMode ?? "حصص") === "حصص") {
-      if (!opts?.keepSessions) setSessionsInput("12");
-    } else {
-      setSessionsInput("0");
-    }
-  }
-
-  function handleStartDateTextChange(text: string) {
-    setStartDateText(text);
-    if (text.length === 10 && /^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
-      const iso = ddmmyyyyToISO(text);
-      if (iso) setStartDate(iso);
-    }
-  }
-
-  function computeEndPreview(): string {
-    if (!branchId) return "—";
-    if (subscriptionMode === "شهري") return computeMonthlyEnd(startDate);
-    if (!selectedBranch) return "—";
-    return computeSessionsEnd(
-      startDate,
-      selectedBranch.days ?? [],
-      Number(sessionsInput)
-    );
-  }
-
-  // ── Print ──────────────────────────────────────────────────────────────────
-  function printPlayers(list: Player[]) {
-    const title =
-      branchFilter === "all"
-        ? "قائمة اللاعبين — جميع الفروع"
-        : `قائمة اللاعبين — ${branchMap.get(branchFilter)?.name ?? "فرع"}`;
-
-    const rowsHtml = list
-      .map((p, idx) => {
-        const b = p.branchId ? branchMap.get(p.branchId) : undefined;
-        const branchName = b?.name ?? "";
-        const liveStatus = calcStatusFromEnd(p.end, p.isPaused);
-        const sessionsLabel =
-          p.subscriptionMode === "شهري"
-            ? "شهري"
-            : String(remainingSessions(p, b) ?? p.sessions);
-        return `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${p.name ?? ""}${p.isLegacy ? " ★" : ""}</td>
-            <td>${p.birth ?? ""}</td>
-            <td>${p.phone ?? ""}</td>
-            <td>${branchName}</td>
-            <td>${sessionsLabel}</td>
-            <td>${p.price ?? ""} د.ك</td>
-            <td>${p.start ?? ""}</td>
-            <td>${p.end ?? ""}</td>
-            <td>${liveStatus}</td>
-          </tr>`;
-      })
-      .join("");
-
-    const html = `
-    <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="utf-8" />
-        <title>${title}</title>
-        <style>
-          body { font-family: Arial, Helvetica, sans-serif; padding: 24px; }
-          h1 { margin: 0 0 8px 0; font-size: 18px; }
-          .meta { color: #555; font-size: 12px; margin-bottom: 16px; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
-          th { background: #f4f4f4; }
-          tr:nth-child(even) td { background: #fafafa; }
-        </style>
-      </head>
-      <body>
-        <h1>${title}</h1>
-        <div class="meta">عدد اللاعبين: ${list.length} — تاريخ الطباعة: ${new Date().toLocaleDateString("ar-KW")}</div>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th><th>الاسم</th><th>سنة الميلاد</th>
-              <th>هاتف ولي الأمر</th><th>الفرع</th>
-              <th>الحصص المتبقية</th><th>السعر</th>
-              <th>تاريخ البداية</th><th>ينتهي في</th><th>الحالة</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml || `<tr><td colspan="10">لا توجد بيانات للطباعة</td></tr>`}
-          </tbody>
-        </table>
-        <script>window.onload = () => window.print();</script>
-      </body>
-    </html>`;
-
-    const w = window.open("", "_blank", "width=1100,height=800");
-    if (!w) {
-      alert("المتصفح منع نافذة الطباعة. اسمح بالـ Popups ثم جرّب مرة أخرى.");
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-  }
-
-  // ── Modal openers ──────────────────────────────────────────────────────────
-  function openAddModal() {
-    setModalType("add");
-    setActivePlayerId(null);
-    setName("");
-    setBirth("");
-    setPhone("");
-    setBranchId("");
-    const todayIso = new Date().toISOString().slice(0, 10);
-    setStartDate(todayIso);
-    setStartDateText(isoToDDMMYYYY(todayIso));
-    setSubscriptionMode("حصص");
-    setSessionsInput("12");
-    setPriceInput("0");
-    setIsLegacy(false);
-    setSaveError(null);
-    setOpen(true);
-  }
-
-  function openEditModal(playerId: string) {
-    const p = players.find((x) => x.id === playerId);
-    if (!p) return;
-    setModalType("edit");
-    setActivePlayerId(playerId);
-    setName(p.name);
-    setBirth(p.birth);
-    setPhone(p.phone ?? "");
-    setBranchId(p.branchId ?? "");
-    const editStartISO =
-      p.start && p.start !== "—" ? ddmmyyyyToISO(p.start) : todayISO;
-    setStartDate(editStartISO);
-    setStartDateText(isoToDDMMYYYY(editStartISO));
-    const editMode = p.subscriptionMode;
-    const editSessions = editMode === "حصص" ? p.sessions : 0;
-    setSubscriptionMode(editMode);
-    setSessionsInput(String(editSessions));
-    setPriceInput(String(p.price ?? 0));
-    setIsLegacy(p.isLegacy);
-    // Fix 6: snapshot sub params so we can detect if they change
-    const currentEndISO = p.end && p.end !== "—" ? ddmmyyyyToISO(p.end) : null;
-    setOriginalEndDateISO(currentEndISO);
-    setOriginalSubParams({
-      startDate: editStartISO,
-      mode: editMode,
-      branchId: p.branchId ?? "",
-      sessions: editSessions,
-    });
-    setSaveError(null);
-    setOpen(true);
-  }
-
-  function openRenewModal(playerId: string) {
-    const p = players.find((x) => x.id === playerId);
-    if (!p) return;
-    setModalType("renew");
-    setActivePlayerId(playerId);
-    setName(p.name);
-    setBirth(p.birth);
-    setPhone(p.phone ?? "");
-    setBranchId(p.branchId ?? "");
-    const endDate = ddmmyyyyToDate(p.end);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let proposed = new Date(today);
-    if (endDate) {
-      const nextDay = addDays(endDate, 1);
-      nextDay.setHours(0, 0, 0, 0);
-      proposed = nextDay.getTime() > today.getTime() ? nextDay : today;
-    }
-    const renewISO = dateToISO(proposed);
-    setStartDate(renewISO);
-    setStartDateText(isoToDDMMYYYY(renewISO));
-    const b = p.branchId ? branchMap.get(p.branchId) : undefined;
-    const mode: SubscriptionMode = b?.subscriptionMode ?? p.subscriptionMode ?? "حصص";
-    setSubscriptionMode(mode);
-    setSessionsInput(mode === "حصص" ? "12" : "0");
-    setPriceInput(String(b?.price ?? p.price ?? 0));
-    setIsLegacy(p.isLegacy);
-    setSaveError(null);
-    setOpen(true);
-  }
-
-  // Feature B: Extend modal
-  function openExtendModal(playerId: string) {
-    setModalType("extend");
-    setActivePlayerId(playerId);
-    setExtendDays(7);
-    setSaveError(null);
-    setOpen(true);
-  }
-
-  // Feature F: History modal — Fix 2: fallback to payments-based synthetic history
-  async function openHistoryModal(playerId: string) {
-    const p = players.find((x) => x.id === playerId);
-    setModalType("history");
-    setActivePlayerId(playerId);
-    setHistoryPlayerName(p?.name ?? "");
-    setHistoryEvents([]);
-    setHistoryLoading(true);
-    setSaveError(null);
-    setOpen(true);
-    try {
-      const [events, pmts] = await Promise.all([
-        listSubscriptionEvents(playerId),
-        listPlayerPayments(playerId).catch(() => [] as DbPayment[]),
-      ]);
-
-      if (events.length > 0) {
-        // Inject synthetic "expired" events from payment gaps into the real event list
-        const syntheticExpired: DbSubscriptionEvent[] = [];
-        const sortedPmts = [...pmts].sort((a, b) => a.date.localeCompare(b.date));
-        for (let i = 0; i < sortedPmts.length - 1; i++) {
-          const cur = sortedPmts[i];
-          const next = sortedPmts[i + 1];
-          if (cur.subscription_end && next) {
-            const endDate = isoToDate(cur.subscription_end);
-            const nextStart = isoToDate(next.date);
-            endDate.setHours(0, 0, 0, 0);
-            nextStart.setHours(0, 0, 0, 0);
-            const gapDays = Math.round((nextStart.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24));
-            if (gapDays > 1) {
-              // Only add if not already present
-              const alreadyExists = events.some(
-                (ev) => ev.event_type === "expired" && ev.event_date === cur.subscription_end
-              );
-              if (!alreadyExists) {
-                syntheticExpired.push({
-                  id: `synth-${cur.id}-expired`,
-                  academy_id: "",
-                  player_id: playerId,
-                  event_type: "expired",
-                  event_date: cur.subscription_end,
-                  extend_days: null,
-                  payment_id: null,
-                  note: null,
-                  created_by: null,
-                  created_at: cur.created_at,
-                });
-              }
-            }
-          }
-        }
-        // Also check if the last payment's subscription has already expired with no renewal
-        const lastPmt = sortedPmts[sortedPmts.length - 1];
-        const todayStr = new Date().toISOString().slice(0, 10);
-        if (lastPmt?.subscription_end && lastPmt.subscription_end < todayStr) {
-          const alreadyHasFinalExpired = [...events, ...syntheticExpired].some(
-            (ev) => ev.event_type === "expired" && ev.event_date >= lastPmt.subscription_end!
-          );
-          if (!alreadyHasFinalExpired) {
-            syntheticExpired.push({
-              id: `synth-${lastPmt.id}-expired-final`,
-              academy_id: "",
-              player_id: playerId,
-              event_type: "expired",
-              event_date: lastPmt.subscription_end,
-              extend_days: null,
-              payment_id: null,
-              note: null,
-              created_by: null,
-              created_at: lastPmt.created_at,
-            });
-          }
-        }
-
-        const merged = [...events, ...syntheticExpired].sort((a, b) =>
-          a.event_date.localeCompare(b.event_date)
-        );
-        setHistoryEvents(merged);
-      } else {
-        // No events yet (table new or player predates feature) — derive from payments
-        setHistoryEvents(buildSyntheticHistory(pmts));
-      }
-    } catch (e) {
-      console.error("[players] history load error:", e);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
-  // ── Save (add / edit / renew) ──────────────────────────────────────────────
-  async function savePlayer() {
-    setSaveError(null);
-
-    if (!name.trim() || !birth.trim() || !branchId) {
-      setSaveError("يرجى تعبئة الاسم + سنة الميلاد + الفرع.");
-      return;
-    }
-    if (phone && !/^[0-9+ ]{6,20}$/.test(phone)) {
-      setSaveError("رقم الهاتف غير صحيح.");
-      return;
-    }
-    const b = branchMap.get(branchId);
-    if (!b) {
-      setSaveError("الفرع غير موجود.");
-      return;
-    }
-    const price = Number(priceInput);
-    if (!Number.isFinite(price) || price <= 0) {
-      setSaveError("سعر الاشتراك غير صحيح.");
-      return;
-    }
-
-    let sessions = 0;
-    let endDateISO: string | null = null;
-
-    if (subscriptionMode === "شهري") {
-      sessions = 0;
-      endDateISO = computeMonthlyEndISO(startDate);
-    } else {
-      const s = Number(sessionsInput);
-      if (!Number.isFinite(s) || s <= 0) {
-        setSaveError("عدد الحصص غير صحيح.");
-        return;
-      }
-      sessions = s;
-      if (!b.days || b.days.length === 0) {
-        setSaveError("أيام الفرع غير محددة. عدل الفرع وحدد أيام التدريب.");
-        return;
-      }
-      endDateISO = computeSessionsEndISO(startDate, b.days, sessions);
-      if (!endDateISO) {
-        setSaveError("تعذر حساب تاريخ النهاية.");
-        return;
-      }
-    }
-
-    // Fix 6: in edit mode, preserve the existing end_date unless subscription params changed.
-    // This prevents overwriting an extended end_date when only name/phone/price is edited.
-    if (modalType === "edit" && originalSubParams && originalEndDateISO) {
-      const unchanged =
-        originalSubParams.startDate === startDate &&
-        originalSubParams.mode === subscriptionMode &&
-        originalSubParams.branchId === branchId &&
-        originalSubParams.sessions === sessions;
-      if (unchanged) {
-        endDateISO = originalEndDateISO;
-      }
-    }
-
-    setSaving(true);
-    try {
-      if (modalType === "add") {
-        const existing = findExistingPlayer(players, { name: name.trim(), birth: birth.trim() });
-        if (existing) {
-          setSaveError(
-            `هذا اللاعب موجود مسبقًا بنفس الاسم وسنة الميلاد: ${existing.name}`
-          );
-          setSaving(false);
-          return;
-        }
-
-        const dbPlayer = await createPlayer({
-          branch_id: branchId || null,
-          name: name.trim(),
-          birth: birth.trim(),
-          phone: phone.trim(),
-          subscription_mode: subscriptionMode,
-          sessions,
-          price,
-          start_date: startDate,
-          end_date: endDateISO,
-          is_legacy: isLegacy,
-        });
-
-        const payment = await createPayment({
-          branch_id:        branchId || null,
-          player_id:        dbPlayer.id,
-          amount:           price,
-          kind:             isLegacy ? "legacy" : "new",
-          date:             startDate,
-          subscription_end: endDateISO,
-        });
-
-        // Feature F: create subscription event (best-effort)
-        try {
-          await createSubscriptionEvent({
-            player_id:  dbPlayer.id,
-            event_type: "first_registration",
-            event_date: startDate,
-            payment_id: (payment as DbPayment).id,
-          });
-        } catch { /* non-critical */ }
-
-        setPlayers((prev) => [dbToPlayer(dbPlayer), ...prev]);
-        setOpen(false);
-        return;
-      }
-
-      if (!activePlayerId) return;
-
-      const dbPlayer = await updatePlayer(activePlayerId, {
-        branch_id: branchId || null,
-        name: name.trim(),
-        birth: birth.trim(),
-        phone: phone.trim(),
-        subscription_mode: subscriptionMode,
-        sessions,
-        price,
-        start_date: startDate,
-        end_date: endDateISO,
-        is_legacy: isLegacy,
-      });
-
-      setPlayers((prev) =>
-        prev.map((p) => (p.id === activePlayerId ? dbToPlayer(dbPlayer) : p))
-      );
-
-      // Fix 1: update latest payment amount when price changes (edit mode only)
-      if (modalType === "edit") {
-        const originalPlayer = players.find((p) => p.id === activePlayerId);
-        if (originalPlayer && price !== originalPlayer.price) {
-          try {
-            const pmts = await listPlayerPayments(activePlayerId);
-            if (pmts.length > 0) await updatePayment(pmts[0].id, { amount: price });
-          } catch { /* non-critical — Finance page re-syncs on next visit */ }
-        }
-      }
-
-      if (modalType === "renew") {
-        const payment = await createPayment({
-          branch_id:        branchId || null,
-          player_id:        activePlayerId,
-          amount:           price,
-          kind:             "renew",
-          date:             startDate,
-          subscription_end: endDateISO,
-        });
-
-        // Feature F: always record as "renewal" (no "returned" concept)
-        try {
-          await createSubscriptionEvent({
-            player_id:  activePlayerId,
-            event_type: "renewal",
-            event_date: startDate,
-            payment_id: (payment as DbPayment).id,
-          });
-        } catch { /* non-critical */ }
-      }
-
-      setOpen(false);
-    } catch (e) {
-      console.error("[players] save error:", e);
-      setSaveError(formatError(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Feature B: do extend (single player) — Fix 3: session-based + Fix 4b: note with new end_date
-  async function doExtend() {
-    if (!activePlayerId || extendDays < 1) return;
-    const p = players.find((x) => x.id === activePlayerId);
-    if (!p) return;
-    if (!p.end || p.end === "—") {
-      setSaveError("لا يوجد تاريخ انتهاء للتمديد.");
-      return;
-    }
-    const branch = p.branchId ? branchMap.get(p.branchId) : undefined;
-    const newEndISO = computeExtendEndISO(p.end, p.subscriptionMode, branch?.days ?? [], extendDays);
-    if (!newEndISO) {
-      setSaveError("تعذر حساب تاريخ التمديد. تأكد من إعداد أيام الفرع.");
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const updated = await updatePlayer(activePlayerId, { end_date: newEndISO });
-      try {
-        await createSubscriptionEvent({
-          player_id:   activePlayerId,
-          event_type:  "extension",
-          event_date:  new Date().toISOString().slice(0, 10),
-          extend_days: extendDays,
-          note:        `ينتهي في: ${isoToDDMMYYYY(newEndISO)}`,
-        });
-      } catch { /* non-critical */ }
-      setPlayers((prev) =>
-        prev.map((x) => (x.id === activePlayerId ? dbToPlayer(updated) : x))
-      );
-      setOpen(false);
-    } catch (e) {
-      setSaveError(formatError(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Feature C: pause / resume
-  async function doTogglePause(playerId: string) {
-    const p = players.find((x) => x.id === playerId);
-    if (!p) return;
-    setPauseToggling(playerId);
-    try {
-      const updated = p.isPaused
-        ? await resumePlayer(playerId)
-        : await pausePlayer(playerId);
-      const eventType: SubscriptionEventType = p.isPaused ? "resumed" : "paused";
-      try {
-        await createSubscriptionEvent({
-          player_id:  playerId,
-          event_type: eventType,
-          event_date: new Date().toISOString().slice(0, 10),
-        });
-      } catch { /* non-critical */ }
-      setPlayers((prev) =>
-        prev.map((x) => (x.id === playerId ? dbToPlayer(updated) : x))
-      );
-    } catch (e) {
-      console.error("[players] pause toggle error:", e);
-      alert(formatError(e));
-    } finally {
-      setPauseToggling(null);
-    }
-  }
-
-  // Feature D: bulk extend — Fix 3: session-based per player
-  async function doBulkExtend() {
-    const ids = Array.from(selectedIds);
-    setBulkProcessing(true);
-    setBulkConfirm(null);
-    const today = new Date().toISOString().slice(0, 10);
-    try {
-      for (const id of ids) {
-        const p = players.find((x) => x.id === id);
-        if (!p || !p.end || p.end === "—") continue;
-        const branch = p.branchId ? branchMap.get(p.branchId) : undefined;
-        const newEndISO = computeExtendEndISO(p.end, p.subscriptionMode, branch?.days ?? [], bulkExtendDays);
-        if (!newEndISO) continue;
-        const updated = await updatePlayer(id, { end_date: newEndISO });
-        try {
-          await createSubscriptionEvent({
-            player_id:   id,
-            event_type:  "extension",
-            event_date:  today,
-            extend_days: bulkExtendDays,
-            note:        `ينتهي في: ${isoToDDMMYYYY(newEndISO)}`,
-          });
-        } catch { /* non-critical */ }
-        setPlayers((prev) =>
-          prev.map((x) => (x.id === id ? dbToPlayer(updated) : x))
-        );
-      }
-      setSelectedIds(new Set());
-    } catch (e) {
-      console.error("[players] bulk extend error:", e);
-      alert(formatError(e));
-    } finally {
-      setBulkProcessing(false);
-    }
-  }
-
-  // Feature D: bulk delete
-  async function doBulkDelete() {
-    const ids = Array.from(selectedIds);
-    setBulkProcessing(true);
-    setBulkConfirm(null);
-    try {
-      for (const id of ids) {
-        await deletePlayer(id);
-        setPlayers((prev) => prev.filter((p) => p.id !== id));
-      }
-      setSelectedIds(new Set());
-    } catch (e) {
-      console.error("[players] bulk delete error:", e);
-      alert(formatError(e));
-    } finally {
-      setBulkProcessing(false);
-    }
-  }
-
-  // ── Filters ────────────────────────────────────────────────────────────────
-  const filteredPlayers = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    return players
-      .filter((p) => {
-        if (!q) return true;
-        return (
-          (p.name ?? "").toLowerCase().includes(q) ||
-          (p.phone ?? "").toLowerCase().includes(q)
-        );
-      })
-      .filter((p) => {
-        const liveStatus = calcStatusFromEnd(p.end, p.isPaused);
-        if (activeFilter === "all") return true;
-        if (activeFilter === "active") return liveStatus === "نشط";
-        if (activeFilter === "ending7") return liveStatus === "قريب";
-        if (activeFilter === "expired") return liveStatus === "منتهي";
-        return true;
-      })
-      .filter((p) => {
-        if (branchFilter === "all") return true;
-        return p.branchId === branchFilter;
-      });
-  }, [players, searchTerm, activeFilter, branchFilter]);
-
-  const filterButtons: Array<{ key: FilterKey; label: string }> = [
-    { key: "all",      label: "جميع اللاعبين" },
-    { key: "active",   label: "النشطون" },
-    { key: "ending7",  label: "ينتهي خلال 7 أيام" },
-    { key: "expired",  label: "المنتهية اشتراكاتهم" },
-  ];
-
-  // Select all filtered
-  const allFilteredSelected =
-    filteredPlayers.length > 0 &&
-    filteredPlayers.every((p) => selectedIds.has(p.id));
-
-  function toggleSelectAll() {
-    if (allFilteredSelected) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        filteredPlayers.forEach((p) => next.delete(p.id));
-        return next;
-      });
-    } else {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        filteredPlayers.forEach((p) => next.add(p.id));
-        return next;
-      });
-    }
-  }
-
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const {
+    // Data
+    players,
+    branches,
+    canManage,
+    // Loading / error
+    loading,
+    pageError,
+    saving,
+    saveError,
+    // Filters
+    activeFilter, setActiveFilter,
+    searchTerm, setSearchTerm,
+    branchFilter, setBranchFilter,
+    pageSize, setPageSize,
+    currentPage, setCurrentPage,
+    // Derived
+    branchMap,
+    filteredPlayers,
+    paginatedPlayers,
+    totalPages,
+    allFilteredSelected,
+    // Modal state
+    open, setOpen,
+    modalType,
+    activePlayerId,
+    // Form fields
+    name, setName,
+    birth, setBirth,
+    phone, setPhone,
+    branchId,
+    startDate,
+    startDateText,
+    subscriptionMode, setSubscriptionMode,
+    sessionsInput, setSessionsInput,
+    priceInput, setPriceInput,
+    isLegacy, setIsLegacy,
+    // Extend
+    extendDays, setExtendDays,
+    // Pause
+    pauseToggling,
+    // Bulk
+    selectedIds, setSelectedIds,
+    bulkExtendDays, setBulkExtendDays,
+    bulkConfirm, setBulkConfirm,
+    bulkTransferBranchId, setBulkTransferBranchId,
+    bulkProcessing,
+    // History
+    historyEvents,
+    historyLoading,
+    historyPlayerName,
+    // Avatar
+    avatarFile, setAvatarFile,
+    avatarPreview, setAvatarPreview,
+    // Operations
+    loadData,
+    applyBranchSettings,
+    handleStartDateTextChange,
+    computeEndPreview,
+    printPlayers,
+    openAddModal,
+    openEditModal,
+    openRenewModal,
+    openExtendModal,
+    openHistoryModal,
+    savePlayer,
+    doExtend,
+    doTogglePause,
+    doBulkExtend,
+    doBulkPause,
+    doBulkTransfer,
+    doBulkDelete,
+    toggleSelectAll,
+    toggleSelect,
+  } = usePlayersPage();
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   return (
@@ -1206,7 +149,7 @@ export default function PlayersPage() {
 
         {/* Row 2: Status filter chips */}
         <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-          {filterButtons.map((btn) => {
+          {FILTER_BUTTONS.map((btn) => {
             const isActive = activeFilter === btn.key;
             return (
               <button
@@ -1228,9 +171,11 @@ export default function PlayersPage() {
 
         {/* Row 3: Actions */}
         <div className="flex items-center gap-3 flex-wrap">
-          <Button onClick={openAddModal} disabled={loading}>
-            + إضافة لاعب
-          </Button>
+          {canManage && (
+            <Button onClick={openAddModal} disabled={loading}>
+              + إضافة لاعب
+            </Button>
+          )}
 
           {!loading && branches.length === 0 && (
             <div className="text-xs text-amber-200/90">
@@ -1243,6 +188,15 @@ export default function PlayersPage() {
             <span className="text-white">{filteredPlayers.length}</span>
           </div>
 
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value) as 30 | 50)}
+            className="h-9 rounded-xl bg-[#0F172A] border border-white/10 px-3 text-xs text-white outline-none focus:border-white/25"
+          >
+            <option value={30}>30 / صفحة</option>
+            <option value={50}>50 / صفحة</option>
+          </select>
+
           <Button
             variant="secondary"
             onClick={() => printPlayers(filteredPlayers)}
@@ -1253,10 +207,20 @@ export default function PlayersPage() {
         </div>
       </div>
 
-      {/* Loading */}
+      {/* Loading skeleton */}
       {loading && (
-        <div className="mt-6 text-white/60 text-sm px-2">
-          جاري التحميل...
+        <div className="mt-4 space-y-3 md:hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[120px] rounded-2xl" />
+          ))}
+        </div>
+      )}
+      {loading && (
+        <div className="mt-4 hidden md:block space-y-2">
+          <Skeleton className="h-10 rounded-xl" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 rounded-xl" />
+          ))}
         </div>
       )}
 
@@ -1269,16 +233,18 @@ export default function PlayersPage() {
                 لا توجد نتائج مطابقة.
               </div>
             ) : (
-              filteredPlayers.map((r) => {
+              paginatedPlayers.map((r) => {
                 const b = r.branchId ? branchMap.get(r.branchId) : undefined;
                 const branchName = b?.name ?? "—";
                 const liveStatus = calcStatusFromEnd(r.end, r.isPaused);
-                const sessionsLabel =
-                  r.subscriptionMode === "شهري"
-                    ? "شهري"
-                    : String(remainingSessions(r, b) ?? r.sessions);
+                const remaining = r.subscriptionMode === "حصص"
+                  ? (remainingSessions(r, b) ?? r.sessions)
+                  : null;
+                const sessionsPct = remaining !== null && r.sessions > 0
+                  ? Math.round((remaining / r.sessions) * 100)
+                  : 0;
                 const isSelected = selectedIds.has(r.id);
-                const isPauseLoading = pauseToggling === r.id;
+                const initials = r.name.trim()[0] ?? "؟";
 
                 return (
                   <div
@@ -1288,108 +254,114 @@ export default function PlayersPage() {
                       isSelected ? "border-[#63C0B0]/40" : "border-white/5",
                     ].join(" ")}
                   >
-                    {/* Card header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-start gap-2 min-w-0 flex-1">
-                        {/* Checkbox */}
+                    {/* Card header: checkbox + avatar + name + status */}
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(r.id)}
-                          className="mt-0.5 h-4 w-4 rounded shrink-0"
+                          className="h-4 w-4 rounded shrink-0"
                           aria-label={`تحديد ${r.name}`}
                         />
+                        {r.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={r.avatarUrl}
+                            alt={r.name}
+                            className="h-10 w-10 rounded-full object-cover shrink-0 border border-white/10"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-[#00ff9c]/10 border border-[#00ff9c]/20 flex items-center justify-center text-base font-bold text-[#00ff9c] shrink-0">
+                            {initials}
+                          </div>
+                        )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                          <div className="font-semibold text-sm text-white/90 flex items-center gap-1.5 flex-wrap">
                             {r.name}
                             {r.isLegacy && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/15 text-amber-300">
-                                قديم
-                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">قديم</span>
                             )}
                             {r.isPaused && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/15 text-blue-400">
-                                تجميد
-                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">تجميد</span>
                             )}
                           </div>
-                          <div className="text-xs text-white/50 mt-0.5">{branchName}</div>
+                          <div className="text-[10px] text-white/30 font-mono mt-0.5">{r.id.slice(0, 8)}</div>
                         </div>
                       </div>
-                      <span
-                        className={`shrink-0 mr-2 px-3 py-1 rounded-full text-xs ${statusStyles[liveStatus]}`}
-                      >
+                      <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs ${statusStyles[liveStatus]}`}>
                         {liveStatus}
                       </span>
                     </div>
 
-                    {/* Card details grid */}
-                    <div className="grid grid-cols-2 gap-y-1.5 text-xs mb-3">
+                    {/* Details grid */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs mb-3 px-1">
                       <div>
-                        <span className="text-white/40">سنة الميلاد: </span>
-                        <span className="text-white/80">{r.birth}</span>
+                        <div className="text-white/35 mb-0.5">الفرع</div>
+                        <div className="text-white/80 truncate">{branchName}</div>
                       </div>
                       <div>
-                        <span className="text-white/40">الهاتف: </span>
-                        <span className="text-white/80">{r.phone || "—"}</span>
+                        <div className="text-white/35 mb-0.5">سنة الميلاد</div>
+                        <div className="text-white/80">{String(r.birth).slice(0, 4)}</div>
                       </div>
                       <div>
-                        <span className="text-white/40">الحصص: </span>
-                        <span className="text-white/80">{sessionsLabel}</span>
+                        <div className="text-white/35 mb-0.5">تاريخ الانتهاء</div>
+                        <div className="text-white/80">{r.end || "—"}</div>
                       </div>
                       <div>
-                        <span className="text-white/40">السعر: </span>
-                        <span className="text-white/80">{r.price} د.ك</span>
-                      </div>
-                      <div>
-                        <span className="text-white/40">البداية: </span>
-                        <span className="text-white/80">{r.start}</span>
-                      </div>
-                      <div>
-                        <span className="text-white/40">الانتهاء: </span>
-                        <span className="text-white/80">{r.end}</span>
+                        <div className="text-white/35 mb-0.5">الحصص المتبقية</div>
+                        {remaining !== null ? (
+                          <div>
+                            <div className="text-white/80">{remaining}<span className="text-white/35"> / {r.sessions}</span></div>
+                            <div className="mt-1 h-1 rounded-full bg-white/8 overflow-hidden w-16">
+                              <div
+                                className={`h-full rounded-full ${sessionsPct > 50 ? "bg-[#00ff9c]" : sessionsPct > 20 ? "bg-amber-400" : "bg-rose-400"}`}
+                                style={{ width: `${Math.max(0, Math.min(100, sessionsPct))}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-white/45">شهري</div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Card actions */}
-                    <div className="flex gap-2 pt-2.5 border-t border-white/5 flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditModal(r.id)}
-                      >
-                        تعديل
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => openRenewModal(r.id)}
-                      >
-                        تجديد
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => openExtendModal(r.id)}
-                      >
-                        تمديد
-                      </Button>
+                    {/* Actions: 3 icon buttons */}
+                    <div className="flex items-center gap-2 pt-3 border-t border-white/5">
                       <button
                         type="button"
-                        title={r.isPaused ? "استئناف الاشتراك" : "إيقاف الاشتراك مؤقتاً"}
-                        disabled={isPauseLoading}
-                        onClick={() => doTogglePause(r.id)}
-                        className="h-8 px-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
-                      >
-                        {isPauseLoading ? "..." : r.isPaused ? "▶" : "⏸"}
-                      </button>
-                      <button
-                        type="button"
-                        title="سجل التسجيل"
+                        title="سجل اللاعب"
                         onClick={() => openHistoryModal(r.id)}
-                        className="h-8 px-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition"
+                        className="flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 border border-white/10 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80 transition text-xs"
                       >
-                        📋
+                        <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        السجل
+                      </button>
+                      {canManage && (
+                        <button
+                          type="button"
+                          title="تعديل اللاعب"
+                          onClick={() => openEditModal(r.id)}
+                          className="flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 border border-white/10 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80 transition text-xs"
+                        >
+                          <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                          تعديل
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        title="تجديد الاشتراك"
+                        onClick={() => openRenewModal(r.id)}
+                        className="flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 border border-[#00ff9c]/25 bg-[#00ff9c]/[0.08] text-[#00ff9c]/70 hover:bg-[#00ff9c]/15 hover:text-[#00ff9c] transition text-xs font-medium"
+                      >
+                        <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        تجديد
                       </button>
                     </div>
                   </div>
@@ -1400,8 +372,8 @@ export default function PlayersPage() {
 
           {/* ── Desktop table (hidden on mobile) ─────────────────────────── */}
           <div className="mt-6 hidden md:block bg-[#111827] rounded-2xl overflow-hidden border border-white/5">
-            <div className="bg-[#0F172A] px-6 py-4 text-sm text-white/80 grid grid-cols-[0.4fr_2fr_0.9fr_1.2fr_1.2fr_0.9fr_1fr_1.1fr_1.1fr_0.9fr_2.5fr] gap-4">
-              {/* Select all */}
+            {/* Header */}
+            <div className="bg-[#0F172A] px-5 py-3.5 grid grid-cols-[0.4fr_2.6fr_1.2fr_0.7fr_2fr_1.3fr_1fr_1.4fr] gap-4 items-center border-b border-white/[0.06]">
               <div className="flex items-center justify-center">
                 <input
                   type="checkbox"
@@ -1411,39 +383,35 @@ export default function PlayersPage() {
                   aria-label="تحديد الجميع"
                 />
               </div>
-              <div>الاسم</div>
-              <div>سنة الميلاد</div>
-              <div>هاتف ولي الأمر</div>
-              <div>الفرع</div>
-              <div>الحصص المتبقية</div>
-              <div>السعر</div>
-              <div>تاريخ البداية</div>
-              <div>ينتهي في</div>
-              <div>الحالة</div>
-              <div className="text-center">الإجراء</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/40">اللاعب</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/40">الفرع</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/40">الميلاد</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/40">الحصص المتبقية</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/40">تاريخ الانتهاء</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/40">الحالة</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-white/40 text-center">الإجراءات</div>
             </div>
 
-            <div>
-              {filteredPlayers.map((r, idx) => {
-                const zebra =
-                  idx % 2 === 0 ? "bg-[#0B1220]" : "bg-[#0E1A2B]";
+            <div className="divide-y divide-white/[0.04]">
+              {paginatedPlayers.map((r) => {
                 const b = r.branchId ? branchMap.get(r.branchId) : undefined;
                 const branchName = b?.name ?? "—";
                 const liveStatus = calcStatusFromEnd(r.end, r.isPaused);
-                const sessionsLabel =
-                  r.subscriptionMode === "شهري"
-                    ? "شهري"
-                    : String(remainingSessions(r, b) ?? r.sessions);
+                const remaining = r.subscriptionMode === "حصص"
+                  ? (remainingSessions(r, b) ?? r.sessions)
+                  : null;
+                const sessionsPct = remaining !== null && r.sessions > 0
+                  ? Math.round((remaining / r.sessions) * 100)
+                  : 0;
                 const isSelected = selectedIds.has(r.id);
-                const isPauseLoading = pauseToggling === r.id;
+                const initials = r.name.trim()[0] ?? "؟";
 
                 return (
                   <div
                     key={r.id}
                     className={[
-                      zebra,
-                      "px-6 py-4 grid grid-cols-[0.4fr_2fr_0.9fr_1.2fr_1.2fr_0.9fr_1fr_1.1fr_1.1fr_0.9fr_2.5fr] gap-4 items-center",
-                      isSelected ? "ring-1 ring-inset ring-[#63C0B0]/30" : "",
+                      "px-5 py-4 grid grid-cols-[0.4fr_2.6fr_1.2fr_0.7fr_2fr_1.3fr_1fr_1.4fr] gap-4 items-center transition-colors hover:bg-white/[0.015]",
+                      isSelected ? "bg-[#63C0B0]/[0.04] ring-1 ring-inset ring-[#63C0B0]/20" : "",
                     ].join(" ")}
                   >
                     {/* Checkbox */}
@@ -1456,71 +424,107 @@ export default function PlayersPage() {
                         aria-label={`تحديد ${r.name}`}
                       />
                     </div>
-                    <div className="font-medium flex items-center gap-2 flex-wrap">
-                      {r.name}
-                      {r.isLegacy && (
-                        <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] bg-amber-500/15 text-amber-300">
-                          قديم
-                        </span>
+
+                    {/* Player: avatar + name + short ID */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      {r.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={r.avatarUrl}
+                          alt={r.name}
+                          className="h-9 w-9 rounded-full object-cover shrink-0 border border-white/10"
+                        />
+                      ) : (
+                        <div className="h-9 w-9 rounded-full bg-[#00ff9c]/10 border border-[#00ff9c]/20 flex items-center justify-center text-sm font-bold text-[#00ff9c] shrink-0 select-none">
+                          {initials}
+                        </div>
                       )}
-                      {r.isPaused && (
-                        <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] bg-blue-500/15 text-blue-400">
-                          تجميد
-                        </span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white/90 flex items-center gap-1.5 flex-wrap leading-snug">
+                          {r.name}
+                          {r.isLegacy && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">قديم</span>
+                          )}
+                          {r.isPaused && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">تجميد</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-white/25 font-mono mt-0.5 tracking-wider">{r.id.slice(0, 8)}</div>
+                      </div>
+                    </div>
+
+                    {/* Branch */}
+                    <div className="text-sm text-white/65 truncate">{branchName}</div>
+
+                    {/* Birth year */}
+                    <div className="text-sm text-white/65">{String(r.birth).slice(0, 4)}</div>
+
+                    {/* Remaining sessions + progress bar */}
+                    <div>
+                      {remaining !== null ? (
+                        <div>
+                          <div className="text-sm">
+                            <span className="font-semibold text-white/90">{remaining}</span>
+                            <span className="text-white/35 text-xs"> / {r.sessions}</span>
+                          </div>
+                          <div className="mt-1.5 h-1.5 rounded-full bg-white/[0.07] overflow-hidden w-24">
+                            <div
+                              className={`h-full rounded-full transition-all ${sessionsPct > 50 ? "bg-[#00ff9c]" : sessionsPct > 20 ? "bg-amber-400" : "bg-rose-400"}`}
+                              style={{ width: `${Math.max(0, Math.min(100, sessionsPct))}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-white/40 px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.08]">شهري</span>
                       )}
                     </div>
-                    <div className="text-white/80">{r.birth}</div>
-                    <div className="text-white/80">{r.phone || "—"}</div>
-                    <div className="text-white/80">{branchName}</div>
-                    <div className="text-white/80">{sessionsLabel}</div>
-                    <div className="text-white/80">{r.price} د.ك</div>
-                    <div className="text-white/80">{r.start}</div>
-                    <div className="text-white/80">{r.end}</div>
+
+                    {/* Expiry date */}
+                    <div className="text-sm text-white/65">{r.end || "—"}</div>
+
+                    {/* Status badge */}
                     <div>
-                      <span
-                        className={`inline-flex px-3 py-1 rounded-full text-xs ${statusStyles[liveStatus]}`}
-                      >
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusStyles[liveStatus]}`}>
                         {liveStatus}
                       </span>
                     </div>
-                    <div className="flex gap-1.5 justify-center flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditModal(r.id)}
-                      >
-                        تعديل
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => openRenewModal(r.id)}
-                      >
-                        تجديد
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => openExtendModal(r.id)}
-                      >
-                        تمديد
-                      </Button>
+
+                    {/* Actions: history · edit · renew */}
+                    <div className="flex items-center justify-center gap-1.5">
+                      {/* History */}
                       <button
                         type="button"
-                        title={r.isPaused ? "استئناف الاشتراك" : "إيقاف الاشتراك مؤقتاً"}
-                        disabled={isPauseLoading}
-                        onClick={() => doTogglePause(r.id)}
-                        className="h-8 px-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
-                      >
-                        {isPauseLoading ? "..." : r.isPaused ? "▶" : "⏸"}
-                      </button>
-                      <button
-                        type="button"
-                        title="سجل التسجيل"
+                        title="سجل اللاعب"
                         onClick={() => openHistoryModal(r.id)}
-                        className="h-8 px-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition"
+                        className="h-8 w-8 rounded-lg flex items-center justify-center border border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80 transition"
                       >
-                        📋
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </button>
+                      {/* Edit */}
+                      {canManage && (
+                        <button
+                          type="button"
+                          title="تعديل اللاعب"
+                          onClick={() => openEditModal(r.id)}
+                          className="h-8 w-8 rounded-lg flex items-center justify-center border border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80 transition"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      )}
+                      {/* Renew — green accent */}
+                      <button
+                        type="button"
+                        title="تجديد الاشتراك"
+                        onClick={() => openRenewModal(r.id)}
+                        className="h-8 w-8 rounded-lg flex items-center justify-center border border-[#00ff9c]/25 bg-[#00ff9c]/[0.08] text-[#00ff9c]/65 hover:bg-[#00ff9c]/15 hover:text-[#00ff9c] transition"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -1528,17 +532,45 @@ export default function PlayersPage() {
               })}
 
               {filteredPlayers.length === 0 && (
-                <div className="p-6 text-sm text-white/60">
+                <div className="px-5 py-10 text-sm text-white/50 text-center">
                   لا توجد نتائج مطابقة.
                 </div>
               )}
             </div>
           </div>
+
+          {/* ── Pagination controls ────────────────────────────────────────── */}
+          {filteredPlayers.length > pageSize && (
+            <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+              <span className="text-xs text-white/40">
+                {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredPlayers.length)} من {filteredPlayers.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="h-8 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10 disabled:opacity-30 transition"
+                >
+                  السابق
+                </button>
+                <span className="text-xs text-white/50">{currentPage} / {totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="h-8 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10 disabled:opacity-30 transition"
+                >
+                  التالي
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
       {/* ── Feature D: Floating bulk action bar ──────────────────────────── */}
-      {selectedIds.size > 0 && (
+      {canManage && selectedIds.size > 0 && (
         <div className="fixed bottom-6 inset-x-0 flex justify-center z-40 pointer-events-none px-4">
           <div className="pointer-events-auto bg-[#111827] border border-white/20 rounded-2xl px-4 py-3 shadow-2xl flex flex-wrap items-center gap-3">
             <span className="text-sm text-white/70 shrink-0">
@@ -1563,6 +595,34 @@ export default function PlayersPage() {
             >
               تمديد
             </button>
+            <button
+              type="button"
+              onClick={() => setBulkConfirm("pause")}
+              disabled={bulkProcessing}
+              className="rounded-xl bg-blue-500/20 border border-blue-500/40 px-4 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/30 transition disabled:opacity-50"
+            >
+              تجميد
+            </button>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={bulkTransferBranchId}
+                onChange={(e) => setBulkTransferBranchId(e.target.value)}
+                className="h-8 rounded-lg bg-[#0F172A] border border-white/10 px-2 text-xs text-white outline-none"
+              >
+                <option value="">نقل إلى فرع…</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => bulkTransferBranchId && setBulkConfirm("transfer")}
+                disabled={bulkProcessing || !bulkTransferBranchId}
+                className="rounded-xl bg-amber-500/20 border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition disabled:opacity-50"
+              >
+                نقل
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setBulkConfirm("delete")}
@@ -1591,6 +651,10 @@ export default function PlayersPage() {
             <p className="text-sm text-white/70 mb-6">
               {bulkConfirm === "delete"
                 ? `هل أنت متأكد؟ سيتم حذف ${selectedIds.size} لاعبين نهائياً`
+                : bulkConfirm === "pause"
+                ? `سيتم تجميد اشتراك ${selectedIds.size} لاعبين`
+                : bulkConfirm === "transfer"
+                ? `سيتم نقل ${selectedIds.size} لاعبين إلى فرع "${branches.find(b => b.id === bulkTransferBranchId)?.name ?? ""}"`
                 : `سيتم تمديد اشتراك ${selectedIds.size} لاعبين بـ ${bulkExtendDays} يوم`}
             </p>
             <div className="flex gap-3">
@@ -1603,7 +667,12 @@ export default function PlayersPage() {
               </Button>
               <Button
                 variant={bulkConfirm === "delete" ? "danger" : "primary"}
-                onClick={bulkConfirm === "delete" ? doBulkDelete : doBulkExtend}
+                onClick={
+                  bulkConfirm === "delete" ? doBulkDelete
+                  : bulkConfirm === "pause" ? doBulkPause
+                  : bulkConfirm === "transfer" ? doBulkTransfer
+                  : doBulkExtend
+                }
                 disabled={bulkProcessing}
               >
                 {bulkProcessing ? "جاري التنفيذ..." : "تأكيد"}
@@ -1694,8 +763,10 @@ export default function PlayersPage() {
             {modalType === "history" && (
               <div>
                 {historyLoading && (
-                  <div className="py-8 text-center text-sm text-white/40">
-                    جاري التحميل...
+                  <div className="space-y-2 py-2">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Skeleton key={i} className="h-12 rounded-xl" />
+                    ))}
                   </div>
                 )}
                 {!historyLoading && historyEvents.length === 0 && (
@@ -1718,10 +789,18 @@ export default function PlayersPage() {
                           key={ev.id}
                           className="flex items-start gap-3 p-3 rounded-xl bg-white/3 border border-white/8"
                         >
-                          <div className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${cfg.color}`}>
-                            {cfg.label}
-                            {ev.event_type === "extension" && ev.extend_days
-                              ? ` (+${ev.extend_days})`
+                          <div className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${
+                            ev.event_type === "extension" && (ev.extend_days ?? 0) < 0
+                              ? "bg-orange-500/15 text-orange-300 border-orange-500/30"
+                              : cfg.color
+                          }`}>
+                            {ev.event_type === "extension" && (ev.extend_days ?? 0) < 0
+                              ? "عكس تمديد"
+                              : cfg.label}
+                            {ev.event_type === "extension" && ev.extend_days != null
+                              ? ev.extend_days > 0
+                                ? ` (+${ev.extend_days})`
+                                : ` (${ev.extend_days})`
                               : ""}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1748,7 +827,86 @@ export default function PlayersPage() {
             {/* ── Add / Edit / Renew modal body ────────────────────────── */}
             {(modalType === "add" || modalType === "edit" || modalType === "renew") && (
               <>
+                {/* Quick actions — edit mode only (pause / extend) */}
+                {modalType === "edit" && activePlayerId && (
+                  <div className="mb-4 flex items-center gap-2 flex-wrap rounded-xl bg-white/[0.03] border border-white/[0.06] px-3 py-2.5">
+                    <span className="text-xs text-white/35 ml-1">إجراءات سريعة:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        doTogglePause(activePlayerId);
+                        setOpen(false);
+                      }}
+                      disabled={pauseToggling === activePlayerId}
+                      className="h-7 px-3 rounded-lg text-xs border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
+                    >
+                      {players.find((p) => p.id === activePlayerId)?.isPaused ? "▶ استئناف الاشتراك" : "⏸ إيقاف مؤقت"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openExtendModal(activePlayerId)}
+                      className="h-7 px-3 rounded-lg text-xs border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition"
+                    >
+                      ↔ تمديد الاشتراك
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Avatar upload */}
+                  {(modalType === "add" || modalType === "edit") && (
+                    <div className="col-span-full">
+                      <div className="text-xs text-white/70 mb-2">صورة اللاعب (اختياري)</div>
+                      <div className="flex items-center gap-4">
+                        {/* Preview circle */}
+                        <div className="shrink-0">
+                          {avatarPreview ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarPreview}
+                              alt="معاينة"
+                              className="h-14 w-14 rounded-full object-cover border border-white/15"
+                            />
+                          ) : (
+                            <div className="h-14 w-14 rounded-full bg-[#00ff9c]/10 border border-[#00ff9c]/20 flex items-center justify-center text-xl font-bold text-[#00ff9c]">
+                              {name.trim()[0] ?? "؟"}
+                            </div>
+                          )}
+                        </div>
+                        {/* File input */}
+                        <label className="flex-1 cursor-pointer">
+                          <div className="h-10 rounded-xl bg-[#0B1220] border border-white/10 border-dashed flex items-center justify-center text-xs text-white/50 hover:border-white/25 hover:text-white/70 transition px-3">
+                            {avatarFile ? avatarFile.name : "اختر صورة..."}
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] ?? null;
+                              setAvatarFile(file);
+                              if (file) {
+                                const url = URL.createObjectURL(file);
+                                setAvatarPreview(url);
+                              }
+                            }}
+                          />
+                        </label>
+                        {/* Clear button */}
+                        {(avatarFile || avatarPreview) && (
+                          <button
+                            type="button"
+                            onClick={() => { setAvatarFile(null); setAvatarPreview(null); }}
+                            className="text-xs text-white/40 hover:text-red-400 transition"
+                            title="حذف الصورة"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Name */}
                   <div className="col-span-full">
                     <div className="text-xs text-white/70 mb-1">الاسم</div>

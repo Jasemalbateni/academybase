@@ -226,10 +226,13 @@ export default function StatisticsPage() {
       setLoading(true);
       setError(null);
       try {
+        // Statistics charts show max 12 months; fetch exactly that window.
+        const last12 = lastNMonths(12, monthKey(todayISO()));
+
         const [dbPlayers, dbPayments, dbFinance, dbBranches] = await Promise.all([
           listPlayers(),
           listPayments(),
-          listFinanceTx(),
+          listFinanceTx(last12),
           listBranches(),
         ]);
         if (cancelled) return;

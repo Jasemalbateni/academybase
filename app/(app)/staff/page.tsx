@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/app/components/ui/Button";
+import { Modal } from "@/app/components/ui/Modal";
 import {
   type DbStaff,
   listStaff,
@@ -13,23 +14,14 @@ import {
   type DbBranch,
   listBranches,
 } from "@/src/lib/supabase/branches";
-
-// ── Error helper ──────────────────────────────────────────────────────────────
-function formatError(e: unknown): string {
-  if (!e) return "خطأ غير محدد";
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object") {
-    const pg = e as Record<string, unknown>;
-    const parts: string[] = [];
-    if (pg.message) parts.push(`message: ${pg.message}`);
-    if (pg.code)    parts.push(`code: ${pg.code}`);
-    if (pg.details) parts.push(`details: ${pg.details}`);
-    if (pg.hint)    parts.push(`hint: ${pg.hint}`);
-    if (parts.length) return parts.join(" | ");
-    return JSON.stringify(e);
-  }
-  return String(e);
-}
+import {
+  listStaffAttendance,
+  countSessionsInMonth,
+  type DbStaffAttendance,
+} from "@/src/lib/supabase/staff-attendance";
+import { getMembership, canManageStaff } from "@/src/lib/supabase/roles";
+import { formatError } from "@/src/lib/utils";
+import { Skeleton } from "@/app/components/Skeleton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type StaffRole = "مدرب" | "إداري" | "موظف";
@@ -47,7 +39,7 @@ type StaffMember = {
   isActive: boolean;
 };
 
-type BranchLite = { id: string; name: string };
+type BranchLite = { id: string; name: string; days: string[] };
 
 function dbToStaff(db: DbStaff): StaffMember {
   return {
@@ -62,10 +54,29 @@ function dbToStaff(db: DbStaff): StaffMember {
   };
 }
 
+// ── Salary breakdown type ──────────────────────────────────────────────────────
+type SalaryBreakdown = {
+  baseSalary:     number;
+  sessionsInMonth: number;
+  attended:       number;
+  absences:       number;
+  totalDeduction: number;
+  netSalary:      number;
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function StaffPage() {
   const [branches, setBranches] = useState<BranchLite[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+
+  const [staffAttendance, setStaffAttendance] = useState<DbStaffAttendance[]>([]);
+  const [expandedStaffId, setExpandedStaffId] = useState<string | null>(null);
+  const currentMonth = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }, []);
+
+  const [canManage, setCanManage] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -91,14 +102,19 @@ export default function StaffPage() {
     setLoading(true);
     setPageError(null);
     try {
-      const [dbBranches, dbStaff] = await Promise.all([
+      const [dbBranches, dbStaff, dbAttendance, membership] = await Promise.all([
         listBranches(),
         listStaff(),
+        listStaffAttendance(currentMonth),
+        getMembership(),
       ]);
+      setCanManage(canManageStaff(membership.role));
       const b: BranchLite[] = dbBranches.map((x: DbBranch) => ({
-        id: x.id,
+        id:   x.id,
         name: x.name,
+        days: x.days ?? [],
       }));
+      setStaffAttendance(dbAttendance);
       setBranches(b);
       setStaff(dbStaff.map(dbToStaff));
       if (b.length) setSingleBranchId(b[0].id);
@@ -111,7 +127,7 @@ export default function StaffPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentMonth]);
 
   useEffect(() => {
     loadData();
@@ -125,6 +141,77 @@ export default function StaffPage() {
         .reduce((sum, m) => sum + (m.monthlySalary || 0), 0),
     [staff]
   );
+
+  // Salary breakdown per staff member for the current month
+  const salaryBreakdownMap = useMemo(() => {
+    const [yearStr, monStr] = currentMonth.split("-");
+    const year  = Number(yearStr);
+    const month = Number(monStr);
+
+    const branchMap = new Map(branches.map((b) => [b.id, b]));
+
+    return new Map<string, SalaryBreakdown>(
+      staff.map((m) => {
+        // Resolve effective branch list
+        const effectiveBranchIds =
+          m.assignMode === "all" ? branches.map((b) => b.id) : m.branchIds;
+
+        const branchCount = Math.max(1, effectiveBranchIds.length);
+
+        let totalSessions = 0;
+        let totalAttended = 0;
+        let totalAbsences = 0;
+        let totalDeduction = 0;
+
+        for (const branchId of effectiveBranchIds) {
+          const branch = branchMap.get(branchId);
+          const sessionsInBranch = branch
+            ? countSessionsInMonth(year, month, branch.days)
+            : 0;
+          totalSessions += sessionsInBranch;
+
+          const branchRecords = staffAttendance.filter(
+            (a) => a.staff_id === m.id && a.branch_id === branchId
+          );
+
+          const attended = branchRecords.filter(
+            (a) => a.status === "present" || a.status === "late"
+          ).length;
+          totalAttended += attended;
+
+          const absences = branchRecords.filter(
+            (a) => a.deduct_from_salary
+          ).length;
+          totalAbsences += absences;
+
+          const deduction = branchRecords
+            .filter((a) => a.deduct_from_salary)
+            .reduce((s, a) => s + (a.deduction_amount || 0), 0);
+          totalDeduction += deduction;
+
+          // If no explicit deduction_amount recorded, estimate from salary ÷ sessions
+          if (absences > 0 && deduction === 0 && sessionsInBranch > 0) {
+            const perSession = (m.monthlySalary / branchCount) / sessionsInBranch;
+            totalDeduction += absences * perSession;
+          }
+        }
+
+        totalDeduction = Math.round(totalDeduction * 100) / 100;
+
+        return [
+          m.id,
+          {
+            baseSalary:      m.monthlySalary,
+            sessionsInMonth: totalSessions,
+            attended:        totalAttended,
+            absences:        totalAbsences,
+            totalDeduction,
+            netSalary:       Math.max(0, m.monthlySalary - totalDeduction),
+          },
+        ];
+      })
+    );
+  }, [staff, branches, staffAttendance, currentMonth]);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function resetForm() {
@@ -279,9 +366,11 @@ export default function StaffPage() {
               <div className="text-xs text-white/60">إجمالي رواتب النشطين</div>
               <div className="text-lg font-bold">{totalActiveSalary} د.ك</div>
             </div>
-            <Button onClick={openAddModal} disabled={loading}>
-              + إضافة موظف
-            </Button>
+            {canManage && (
+              <Button onClick={openAddModal} disabled={loading}>
+                + إضافة موظف
+              </Button>
+            )}
           </div>
         </div>
 
@@ -299,9 +388,14 @@ export default function StaffPage() {
           </div>
         )}
 
-        {/* Loading */}
+        {/* Loading skeleton */}
         {loading && (
-          <div className="text-white/60 text-sm">جاري التحميل...</div>
+          <div className="mt-4 space-y-2">
+            <Skeleton className="h-10 rounded-xl" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 rounded-xl" />
+            ))}
+          </div>
         )}
 
         {/* No branches warning */}
@@ -314,7 +408,91 @@ export default function StaffPage() {
         {/* Table */}
         {!loading && branches.length > 0 && (
           <div className="mt-6 bg-[#111827] rounded-2xl border border-white/5">
-            <div className="overflow-x-auto">
+
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-white/[0.07]">
+              {staff.length === 0 ? (
+                <div className="px-4 py-6 text-white/60 text-sm">
+                  لا يوجد طاقم بعد. اضغط &quot;إضافة موظف&quot;.
+                </div>
+              ) : (
+                staff.map((m) => {
+                  const breakdown = salaryBreakdownMap.get(m.id);
+                  const isExpanded = expandedStaffId === m.id;
+                  return (
+                    <div key={m.id} className="px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-white">{m.name}</div>
+                          <div className="text-xs text-white/55 mt-0.5">{roleLabel(m)}</div>
+                          <div className="text-xs text-white/45 mt-0.5">{branchLabel(m.branchIds)}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-bold">{m.monthlySalary} د.ك</div>
+                          {breakdown && breakdown.totalDeduction > 0 && (
+                            <div className="text-xs text-red-400">صافي: {breakdown.netSalary} د.ك</div>
+                          )}
+                          <span className={m.isActive
+                            ? "inline-flex mt-1 px-2 py-0.5 rounded-full text-xs bg-green-500/15 text-green-300"
+                            : "inline-flex mt-1 px-2 py-0.5 rounded-full text-xs bg-red-500/15 text-red-300"
+                          }>
+                            {m.isActive ? "نشط" : "موقوف"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedStaffId(isExpanded ? null : m.id)}
+                          className="px-2 py-1 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/10 transition"
+                        >
+                          {isExpanded ? "▲ إخفاء" : "▼ تفاصيل الراتب"}
+                        </button>
+                        {canManage && (
+                          <>
+                            <Button variant="ghost" size="xs" onClick={() => openEditModal(m.id)}>تعديل</Button>
+                            <Button variant="danger" size="xs" onClick={() => removeStaff(m.id)}>حذف</Button>
+                          </>
+                        )}
+                      </div>
+                      {isExpanded && breakdown && (
+                        <div className="mt-3 rounded-xl bg-black/20 border border-white/10 p-3">
+                          <div className="text-xs font-semibold text-white/60 mb-2">تفاصيل الراتب — {currentMonth}</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                              <div className="text-xs text-white/50">الراتب الأساسي</div>
+                              <div className="text-sm font-semibold mt-0.5">{breakdown.baseSalary} د.ك</div>
+                            </div>
+                            <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                              <div className="text-xs text-white/50">حصص الشهر</div>
+                              <div className="text-sm font-semibold mt-0.5">{breakdown.sessionsInMonth}</div>
+                            </div>
+                            <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                              <div className="text-xs text-white/50">حضور مسجّل</div>
+                              <div className="text-sm font-semibold text-emerald-400 mt-0.5">{breakdown.attended}</div>
+                            </div>
+                            <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                              <div className="text-xs text-white/50">غيابات (خصم)</div>
+                              <div className="text-sm font-semibold text-red-400 mt-0.5">{breakdown.absences}</div>
+                            </div>
+                          </div>
+                          {breakdown.totalDeduction > 0 && (
+                            <div className="mt-2 text-center text-xs">
+                              <span className="text-white/50">صافي الراتب: </span>
+                              <span className="text-amber-300 font-bold">{breakdown.netSalary} د.ك</span>
+                              <span className="text-red-400 mr-1">(− {breakdown.totalDeduction} خصم)</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
             <div className="min-w-[620px]">
             <div className="bg-[#0F172A] px-6 py-4 text-sm text-white/80 grid grid-cols-[1.6fr_1.2fr_1fr_1.8fr_0.9fr_1.2fr] gap-4">
               <div>الاسم</div>
@@ -332,64 +510,127 @@ export default function StaffPage() {
                 </div>
               ) : (
                 staff.map((m, idx) => {
-                  const zebra =
-                    idx % 2 === 0 ? "bg-[#0B1220]" : "bg-[#0E1A2B]";
+                  const zebra = idx % 2 === 0 ? "bg-[#0B1220]" : "bg-[#0E1A2B]";
+                  const breakdown = salaryBreakdownMap.get(m.id);
+                  const isExpanded = expandedStaffId === m.id;
                   return (
-                    <div
-                      key={m.id}
-                      className={`${zebra} px-6 py-4 grid grid-cols-[1.6fr_1.2fr_1fr_1.8fr_0.9fr_1.2fr] gap-4 items-center`}
-                    >
-                      <div className="font-medium">{m.name}</div>
-                      <div className="text-white/80">{roleLabel(m)}</div>
-                      <div className="text-white/80">
-                        {m.monthlySalary} د.ك
-                      </div>
-                      <div className="text-white/80">
-                        {branchLabel(m.branchIds)}
-                      </div>
-                      <div>
-                        <span
-                          className={
-                            m.isActive
-                              ? "inline-flex px-3 py-1 rounded-full text-xs bg-green-500/15 text-green-300"
-                              : "inline-flex px-3 py-1 rounded-full text-xs bg-red-500/15 text-red-300"
-                          }
-                        >
-                          {m.isActive ? "نشط" : "موقوف"}
-                        </span>
-                      </div>
+                    <div key={m.id}>
                       <div
-                        className="flex items-center justify-end gap-2"
-                        style={{ direction: "ltr" }}
+                        className={`${zebra} px-6 py-4 grid grid-cols-[1.6fr_1.2fr_1fr_1.8fr_0.9fr_1.2fr] gap-4 items-center`}
                       >
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => openEditModal(m.id)}
+                        <div className="font-medium">{m.name}</div>
+                        <div className="text-white/80">{roleLabel(m)}</div>
+                        <div>
+                          <div className="text-white/80">{m.monthlySalary} د.ك</div>
+                          {breakdown && breakdown.totalDeduction > 0 && (
+                            <div className="text-xs text-red-400 mt-0.5">
+                              صافي: {breakdown.netSalary} د.ك
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-white/80">
+                          {branchLabel(m.branchIds)}
+                        </div>
+                        <div>
+                          <span
+                            className={
+                              m.isActive
+                                ? "inline-flex px-3 py-1 rounded-full text-xs bg-green-500/15 text-green-300"
+                                : "inline-flex px-3 py-1 rounded-full text-xs bg-red-500/15 text-red-300"
+                            }
+                          >
+                            {m.isActive ? "نشط" : "موقوف"}
+                          </span>
+                        </div>
+                        <div
+                          className="flex items-center justify-end gap-2"
+                          style={{ direction: "ltr" }}
                         >
-                          تعديل
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="xs"
-                          onClick={() => removeStaff(m.id)}
-                        >
-                          حذف
-                        </Button>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedStaffId(isExpanded ? null : m.id)}
+                            className="px-2 py-1 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/10 transition"
+                            title="تفاصيل الراتب"
+                          >
+                            {isExpanded ? "▲" : "▼"}
+                          </button>
+                          {canManage && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => openEditModal(m.id)}
+                              >
+                                تعديل
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="xs"
+                                onClick={() => removeStaff(m.id)}
+                              >
+                                حذف
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Salary breakdown panel */}
+                      {isExpanded && breakdown && (
+                        <div className={`${zebra} px-6 pb-4 border-t border-white/5`}>
+                          <div className="mt-3 rounded-xl bg-black/20 border border-white/10 p-4">
+                            <div className="text-xs font-semibold text-white/60 mb-3">
+                              تفاصيل الراتب — {currentMonth}
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                              <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                                <div className="text-xs text-white/50">الراتب الأساسي</div>
+                                <div className="text-sm font-semibold mt-0.5">{breakdown.baseSalary} د.ك</div>
+                              </div>
+                              <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                                <div className="text-xs text-white/50">حصص الشهر</div>
+                                <div className="text-sm font-semibold mt-0.5">{breakdown.sessionsInMonth}</div>
+                              </div>
+                              <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                                <div className="text-xs text-white/50">حضور مسجّل</div>
+                                <div className="text-sm font-semibold text-emerald-400 mt-0.5">{breakdown.attended}</div>
+                              </div>
+                              <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                                <div className="text-xs text-white/50">غيابات (خصم)</div>
+                                <div className="text-sm font-semibold text-red-400 mt-0.5">{breakdown.absences}</div>
+                              </div>
+                              <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                                <div className="text-xs text-white/50">صافي الراتب</div>
+                                <div className={`text-sm font-bold mt-0.5 ${breakdown.totalDeduction > 0 ? "text-amber-300" : "text-emerald-300"}`}>
+                                  {breakdown.netSalary} د.ك
+                                  {breakdown.totalDeduction > 0 && (
+                                    <span className="text-xs text-red-400 block">
+                                      - {breakdown.totalDeduction} خصم
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            {breakdown.sessionsInMonth === 0 && (
+                              <p className="text-xs text-white/40 mt-2">
+                                لم يتم تسجيل جدول الفرع أو لا توجد حصص هذا الشهر.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })
               )}
             </div>
             </div>{/* min-w */}
-            </div>{/* overflow-x-auto */}
+            </div>{/* hidden md:block */}
           </div>
         )}
 
         {/* Modal */}
-        {open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <Modal open={open} onClose={() => { setOpen(false); resetForm(); }}>
             <div className="w-full max-w-[760px] rounded-[28px] bg-[#111827] border border-white/10 shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="px-4 sm:px-8 pt-6 sm:pt-8 flex items-start justify-between">
                 <div>
@@ -595,8 +836,7 @@ export default function StaffPage() {
                 </Button>
               </div>
             </div>
-          </div>
-        )}
+        </Modal>
       </main>
   );
 }

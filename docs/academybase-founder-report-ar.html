@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>تقرير القرار التنفيذي — AcademyBase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #0b1220;
+      --card:     #161a30;
+      --card2:    #1c2240;
+      --accent:   #00ff9c;
+      --accent2:  #00e0ff;
+      --border:   rgba(255,255,255,0.06);
+      --border2:  rgba(255,255,255,0.12);
+      --text:     #f4f4f9;
+      --sec:      rgba(255,255,255,0.65);
+      --muted:    rgba(255,255,255,0.38);
+      --red:      #ff4d6d;
+      --orange:   #ff9f43;
+      --yellow:   #ffd166;
+      --green:    #06d6a0;
+      --r:        14px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Cairo',Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.9;font-size:15px;direction:rtl;text-align:right}
+
+    /* COVER */
+    .cover{min-height:100vh;background:linear-gradient(145deg,#0b1220 0%,#0f1a38 55%,#0b1220 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px 48px;position:relative;overflow:hidden;page-break-after:always}
+    .cover::before{content:'';position:absolute;top:-200px;left:-200px;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,255,156,.07) 0%,transparent 70%);pointer-events:none}
+    .cover::after{content:'';position:absolute;bottom:-200px;right:-200px;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,224,255,.07) 0%,transparent 70%);pointer-events:none}
+    .cover-eyebrow{display:inline-block;background:rgba(0,255,156,.08);border:1px solid rgba(0,255,156,.25);color:var(--accent);font-size:12px;font-weight:700;letter-spacing:2px;padding:6px 22px;border-radius:50px;margin-bottom:36px}
+    .cover-product{font-size:46px;font-weight:900;margin-bottom:6px}
+    .cover-product span{color:var(--accent)}
+    .cover-sub{font-size:15px;color:var(--sec);margin-bottom:48px}
+    .cover-title{font-size:44px;font-weight:900;line-height:1.25;margin-bottom:18px;background:linear-gradient(135deg,#fff 0%,rgba(255,255,255,.72) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .cover-desc{font-size:16px;color:var(--sec);max-width:560px;margin:0 auto 52px;line-height:2}
+    .divider{width:56px;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;margin:0 auto 48px}
+    .cover-meta{display:flex;gap:40px;justify-content:center;flex-wrap:wrap}
+    .meta-item .lbl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
+    .meta-item .val{font-size:14px;font-weight:700;color:var(--text)}
+
+    /* PAGE */
+    .page{max-width:920px;margin:0 auto;padding:60px 52px}
+
+    /* SECTION HEADER */
+    .sh{display:flex;align-items:center;gap:16px;margin-bottom:36px;padding-bottom:20px;border-bottom:1px solid var(--border2)}
+    .sh-num{width:50px;height:50px;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#0b1220;flex-shrink:0}
+    .sh-title{font-size:26px;font-weight:800}
+    .sh-sub{font-size:13px;color:var(--muted);margin-top:3px;font-weight:500}
+
+    /* CARDS */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px 32px;margin-bottom:22px}
+    .card-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+    .icon-box{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+
+    /* ALERTS */
+    .alert{border-radius:10px;padding:18px 22px;margin-bottom:16px;border-right:4px solid;font-size:14.5px;line-height:1.85}
+    .a-crit{background:rgba(255,77,109,.07);border-color:var(--red);color:#ffc5ce}
+    .a-high{background:rgba(255,159,67,.07);border-color:var(--orange);color:#ffdfc0}
+    .a-med {background:rgba(255,209,102,.07);border-color:var(--yellow);color:#fff2c0}
+    .a-good{background:rgba(0,255,156,.06);border-color:var(--accent);color:#b3ffd9}
+    .a-info{background:rgba(0,224,255,.06);border-color:var(--accent2);color:#b3f6ff}
+    .alert strong{font-weight:700;display:block;margin-bottom:4px}
+
+    /* BADGES */
+    .b{display:inline-flex;align-items:center;gap:4px;padding:3px 13px;border-radius:50px;font-size:11px;font-weight:700}
+    .b-crit{background:rgba(255,77,109,.15);color:var(--red);border:1px solid rgba(255,77,109,.3)}
+    .b-high{background:rgba(255,159,67,.15);color:var(--orange);border:1px solid rgba(255,159,67,.3)}
+    .b-med {background:rgba(255,209,102,.15);color:var(--yellow);border:1px solid rgba(255,209,102,.3)}
+    .b-low {background:rgba(0,255,156,.10);color:var(--accent);border:1px solid rgba(0,255,156,.25)}
+    .b-good{background:rgba(6,214,160,.10);color:var(--green);border:1px solid rgba(6,214,160,.25)}
+
+    /* ISSUE BLOCK */
+    .issue{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:24px;overflow:hidden}
+    .issue-head{padding:20px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
+    .issue-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .issue-head-text .title{font-size:16px;font-weight:700}
+    .issue-head-text .sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .issue-body{padding:20px 28px}
+    .issue-body .row{display:grid;grid-template-columns:160px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+    .issue-body .row:last-child{border-bottom:none}
+    .issue-body .row .label{font-size:12px;font-weight:700;color:var(--muted);padding-top:2px}
+    .issue-body .row .value{font-size:14px;color:var(--sec);line-height:1.8}
+
+    /* TWO COL */
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
+
+    /* LISTS */
+    ul,ol{padding-right:20px;margin:10px 0}
+    li{margin-bottom:9px;color:var(--sec);line-height:1.85}
+    li strong{color:var(--text)}
+    .ck{list-style:none;padding-right:0}
+    .ck li{padding-right:24px;position:relative}
+    .ck li::before{content:'✓';position:absolute;right:0;color:var(--accent);font-weight:700}
+    .xk{list-style:none;padding-right:0}
+    .xk li{padding-right:24px;position:relative}
+    .xk li::before{content:'✗';position:absolute;right:0;color:var(--red);font-weight:700}
+
+    /* PHASE */
+    .phase{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:22px;overflow:hidden}
+    .phase-head{padding:20px 28px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border)}
+    .phase-num{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0}
+    .p1{background:rgba(255,77,109,.15);color:var(--red)}
+    .p2{background:rgba(255,159,67,.15);color:var(--orange)}
+    .p3{background:rgba(255,209,102,.15);color:var(--yellow)}
+    .p4{background:rgba(0,255,156,.12);color:var(--accent)}
+    .phase-head-text .ph-title{font-size:16px;font-weight:700}
+    .phase-head-text .ph-sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .phase-items{padding:14px 28px}
+    .pi{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+    .pi:last-child{border-bottom:none}
+    .pi-num{width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;margin-top:2px}
+    .pi-text{flex:1;font-size:14px;color:var(--sec);line-height:1.8}
+    .pi-text strong{color:var(--text)}
+
+    /* TABLE */
+    .tw{overflow-x:auto;margin-bottom:24px;border-radius:var(--r);border:1px solid var(--border)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead tr{background:rgba(255,255,255,.04)}
+    th{padding:14px 16px;text-align:right;font-weight:700;font-size:11.5px;color:var(--sec);letter-spacing:.5px;border-bottom:1px solid var(--border2)}
+    td{padding:13px 16px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top;line-height:1.75}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(255,255,255,.015)}
+
+    /* HIGHLIGHT */
+    .hl{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:22px 26px}
+    .hl .hl-label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px}
+    .hl.str .hl-label{color:var(--accent)}
+    .hl.wk  .hl-label{color:var(--red)}
+
+    /* STATS */
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:26px}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:22px;text-align:center}
+    .stat .n{font-size:36px;font-weight:900;line-height:1;margin-bottom:6px}
+    .stat .l{font-size:12px;color:var(--muted);font-weight:600}
+
+    /* WARNING BOX */
+    .warn{background:rgba(255,77,109,.05);border:1px solid rgba(255,77,109,.2);border-radius:var(--r);padding:24px 28px;margin-bottom:22px}
+    .warn h3{color:var(--red);font-size:15px;margin-bottom:10px}
+
+    /* FINAL */
+    .final{background:linear-gradient(135deg,rgba(0,255,156,.05) 0%,rgba(0,224,255,.05) 100%);border:1px solid rgba(0,255,156,.15);border-radius:var(--r);padding:34px 38px;margin-bottom:22px}
+    .final h3{font-size:20px;color:var(--accent);margin-bottom:16px}
+
+    /* MISC */
+    h2{font-size:20px;font-weight:700;margin-bottom:14px;color:var(--text)}
+    h3{font-size:16px;font-weight:700;margin-bottom:10px;color:var(--text)}
+    p{color:var(--sec);line-height:1.9;margin-bottom:14px}
+    .sep{height:1px;background:var(--border2);margin:44px 0}
+    .pb{page-break-before:always}
+    .accent{color:var(--accent)}
+    .muted{color:var(--muted)}
+    small{font-size:12px;color:var(--muted)}
+
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.cover{min-height:auto;padding:80px 60px}.page{padding:44px 52px}}
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ COVER ═══════════════ -->
+<div class="cover">
+  <div class="cover-eyebrow">للمؤسس · وثيقة قرار داخلية</div>
+  <div class="cover-product">Academy<span>Base</span></div>
+  <div class="cover-sub">منصة إدارة الأكاديميات الرياضية</div>
+  <div class="divider"></div>
+  <div class="cover-title">تقرير المراجعة الشاملة<br/>بلغة الأعمال</div>
+  <p class="cover-desc">
+    ترجمة كاملة للتقرير التقني إلى لغة واضحة يفهمها المؤسس —
+    ما الذي يعمل جيدًا، ما الذي يحتاج تصحيحًا، ما الذي يؤثر على المستخدمين الآن،
+    وكيف نتحرك بأمان دون تعطيل ما يعمل.
+  </p>
+  <div class="cover-meta">
+    <div class="meta-item"><div class="lbl">التاريخ</div><div class="val">29 مارس 2026</div></div>
+    <div class="meta-item"><div class="lbl">موجّه لـ</div><div class="val">المؤسس · فريق القرار</div></div>
+    <div class="meta-item"><div class="lbl">المصدر</div><div class="val">تقرير المراجعة التقنية الشاملة</div></div>
+    <div class="meta-item"><div class="lbl">التقييم الحالي</div><div class="val" style="color:var(--yellow)">5.3 / 10</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ SECTION A: EXECUTIVE EXPLANATION ═══════════════ -->
+<div class="page">
+  <div class="sh">
+    <div class="sh-num">أ</div>
+    <div>
+      <div class="sh-title">الصورة الكاملة — بلغة بسيطة</div>
+      <div class="sh-sub">ما الذي يعمل · ما الذي لا يعمل · ما الأكثر إلحاحًا</div>
+    </div>
+  </div>
+
+  <p>
+    AcademyBase منصة بُنيت بجهد حقيقي وعلى أساس تقني سليم. هي <strong>تعمل</strong>، وتخدم المستخدمين، وتُدير أكاديميات فعلية.
+    لكن المنصة وصلت إلى نقطة تحوّل مهمة — إذا تُركت المشاكل الحالية دون معالجة، ستبدأ في إبطاء النمو وتعقيد إضافة الميزات الجديدة.
+    الخبر الجيد: لا شيء يستدعي إعادة بناء من الصفر. كل ما يلزم هو تصحيحات موجّهة ومُرتَّبة بعناية.
+  </p>
+
+  <!-- What works -->
+  <h2>✦ ما يعمل جيدًا اليوم</h2>
+  <div class="two">
+    <div class="hl str">
+      <div class="hl-label">نقاط القوة الفعلية</div>
+      <ul class="ck">
+        <li><strong>نظام الأمان والصلاحيات</strong> مبني بشكل صحيح. البيانات محمية على مستوى قاعدة البيانات.</li>
+        <li><strong>آلية إلغاء الجلسات</strong> تعمل مع إمكانية التراجع — تصميم صلب.</li>
+        <li><strong>نظام التنبيهات والتحليلات</strong> يُنتج معلومات تشغيلية مفيدة.</li>
+        <li><strong>نظام الدعوات</strong> آمن وصحيح في تصميمه الجوهري.</li>
+        <li><strong>الواجهة العربية RTL</strong> صحيحة في معظمها ومناسبة للسوق المستهدف.</li>
+      </ul>
+    </div>
+    <div class="hl wk">
+      <div class="hl-label">نقاط الضعف الجوهرية</div>
+      <ul class="xk">
+        <li><strong>الموبايل مكسور</strong> في شاشة التقويم وكل الجداول — يؤثر على المستخدمين اليوم.</li>
+        <li><strong>لا حدود لحجم البيانات المحمّلة</strong> — ستتباطأ المنصة مع نمو الأكاديميات.</li>
+        <li><strong>ثلاثة ملفات ضخمة جدًا</strong> تجعل إضافة أي ميزة مجازفة.</li>
+        <li><strong>تحسينات أداء موجودة لكن معطّلة</strong> — جاهزة للتفعيل فقط.</li>
+        <li><strong>ثغرات أمنية صغيرة</strong> تحتاج إغلاق فوري.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- What affects users now -->
+  <h2>🔴 ما يؤثر على المستخدمين الآن</h2>
+  <div class="alert a-crit">
+    <strong>شاشة التقويم غير قابلة للاستخدام على الهاتف</strong>
+    هذه أكثر الشاشات استخدامًا يوميًا في أي أكاديمية رياضية. المدربون والموظفون يتحققون منها على هواتفهم باستمرار. الشاشة الحالية على الهاتف مزدحمة جدًا لدرجة أنها لا تُقرأ. هذا يعني أن فريق العمل يضطر للاستخدام على الكمبيوتر فقط.
+  </div>
+  <div class="alert a-crit">
+    <strong>جداول البيانات لا تعمل بشكل صحيح على الهاتف</strong>
+    صفحات اللاعبين والمالية والموظفين والفروع تعرض جداول عريضة جدًا على الهاتف. المستخدم يرى جزءًا منها فقط ولا يعرف أنه يمكنه التمرير لرؤية الباقي. كثيرون يظنون أن البيانات ناقصة.
+  </div>
+  <div class="alert a-high">
+    <strong>أزرار الإجراءات صغيرة جدًا على الهاتف</strong>
+    أزرار التعديل والحذف والتجديد وغيرها صغيرة بحيث يصعب الضغط عليها بإصبع عادي. هذا يُبطئ العمل ويزيد احتمالية الضغط على الزر الخاطئ.
+  </div>
+  <div class="alert a-high">
+    <strong>الصفحات تبدو بطيئة عند الفتح</strong>
+    كل صفحة تعرض نصًا "جاري التحميل..." ثم تظهر البيانات فجأة مُسبِّبةً قفزة في التصميم. لا توجد حركة انتقالية أو هياكل تحميل احترافية.
+  </div>
+
+  <!-- What affects scaling -->
+  <h2>🟡 ما يؤثر على النمو والتوسع لاحقًا</h2>
+  <div class="alert a-med">
+    <strong>لا حد أقصى لكمية البيانات المحمّلة في وقت واحد</strong>
+    حاليًا، عند فتح صفحة اللاعبين تُحمَّل قائمة كل اللاعبين دفعة واحدة. نفس الأمر في المالية والمدفوعات. لأكاديمية صغيرة هذا مقبول، لكن أكاديمية بـ 300 لاعب أو 2 سنة من السجلات المالية ستعاني من بطء شديد جدًا.
+  </div>
+  <div class="alert a-med">
+    <strong>تحسينات أداء جاهزة لكن لم تُفعَّل بعد</strong>
+    الفريق التقني أعدّ مسبقًا حلولًا تُسرِّع لوحة التحكم والإحصاءات بنسبة 60–80٪ (ملفات محسوبة مسبقًا في قاعدة البيانات) لكنها غير موصولة بالتطبيق بعد. تفعيلها يعني قراءة الأرقام من ملف جاهز بدل إعادة حسابها في كل مرة.
+  </div>
+</div>
+
+<!-- ═══════════════ SECTION B: ISSUE BY ISSUE ═══════════════ -->
+<div class="page pb">
+  <div class="sh">
+    <div class="sh-num">ب</div>
+    <div>
+      <div class="sh-title">كل مشكلة — بالتفصيل البسيط</div>
+      <div class="sh-sub">ما هي · لماذا تهم · ما الذي يحدث لو تُركت · مدى الإلحاح</div>
+    </div>
+  </div>
+
+  <!-- Issue 1 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(255,77,109,.15)">📅</div>
+      <div class="issue-head-text">
+        <div class="title">التقويم لا يعمل على الهاتف</div>
+        <div class="sub">يؤثر على: المدربين والموظفين يوميًا &nbsp;|&nbsp; <span class="b b-crit">حرج</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">شاشة التقويم مُصمَّمة للكمبيوتر فقط. على الهاتف، تُعرض كل أيام الشهر في شبكة ضيقة لا تتسع للمعلومات المطلوبة، فتتداخل الأرقام والأزرار وتصبح الشاشة مستحيلة الاستخدام.</div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">التقويم هو الشاشة التي يتحقق منها الموظفون والمدربون أكثر من غيرها. إذا كانت غير قابلة للاستخدام على الهاتف فالفريق مقيّد بالكمبيوتر فقط — وهذا يُقلّص مرونة العمل بشكل كبير.</div></div>
+      <div class="row"><div class="label">ماذا لو تُركت؟</div><div class="value">مستخدمون ينفرون، تقييمات سلبية، وحاجة متزايدة للدعم. عندما تنمو الأكاديميات وتُضاف للمنصة تكون هذه أول شكوى يسمعها الفريق.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-crit">فوري</span> — يؤثر على مستخدمين حاليين كل يوم</div></div>
+      <div class="row"><div class="label">الحل البسيط</div><div class="value">على الهاتف: إظهار أحداث يوم واحد فقط في قائمة رأسية مع أسهم للتنقل بين الأيام. لا حاجة لتغيير شاشة الكمبيوتر.</div></div>
+    </div>
+  </div>
+
+  <!-- Issue 2 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(255,77,109,.15)">📋</div>
+      <div class="issue-head-text">
+        <div class="title">جداول البيانات لا تتلاءم مع الهاتف</div>
+        <div class="sub">يؤثر على: اللاعبون · المالية · الموظفون · الفروع &nbsp;|&nbsp; <span class="b b-crit">حرج</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">الجداول في كل الصفحات الرئيسية مُصمَّمة بعرض ثابت كبير. على الهاتف تُعرض جزئيًا دون إشارة واضحة أن هناك المزيد خارج الشاشة. المستخدم يرى نصف البيانات ويظن أنها كل شيء.</div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">معظم مستخدمي المنصة يستخدمون هواتفهم في العمل اليومي. رؤية بيانات ناقصة تُفقد الثقة في المنصة وتُؤخر القرارات.</div></div>
+      <div class="row"><div class="label">ماذا لو تُركت؟</div><div class="value">مستخدمون يُخطئون في القرارات بناءً على معلومات ناقصة. شكاوى متكررة في الدعم. رغبة في التحول لحلول منافسة.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-crit">فوري</span> — يؤثر على كل مستخدم يفتح المنصة على الهاتف</div></div>
+      <div class="row"><div class="label">الحل البسيط</div><div class="value">على الهاتف: تحويل الجداول إلى بطاقات رأسية تعرض بيانات كل صف في بطاقة منفصلة قابلة للنقر. الجدول يبقى كما هو على الكمبيوتر.</div></div>
+    </div>
+  </div>
+
+  <!-- Issue 3 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(255,159,67,.15)">⚡</div>
+      <div class="issue-head-text">
+        <div class="title">المنصة ستتباطأ مع نمو البيانات</div>
+        <div class="sub">يؤثر على: جميع المستخدمين عند التوسع &nbsp;|&nbsp; <span class="b b-high">عالي</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">حاليًا عند فتح أي صفحة يتم تحميل كل البيانات دفعة واحدة — كل اللاعبين، كل المعاملات المالية، كل السجلات. هذا يعمل لأكاديمية صغيرة، لكنه سيُفشل أكاديمية متوسطة الحجم.</div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">كلما زادت بيانات الأكاديمية، زاد وقت فتح كل صفحة. عند 300 لاعب أو سنتين من السجلات المالية، ستصبح بعض الصفحات بطيئة جدًا لدرجة الإحباط.</div></div>
+      <div class="row"><div class="label">ماذا لو تُركت؟</div><div class="value">المنصة ستعاني عند الوصول إلى حجم معين. الأكاديميات الكبيرة ستشكو، وإصلاحها لاحقًا مع بيانات حقيقية أصعب وأخطر.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-high">قبل نمو أي أكاديمية كبيرة</span> — هذا وقت إصلاحه الآن وليس لاحقًا</div></div>
+      <div class="row"><div class="label">الحل البسيط</div><div class="value">تحميل 50 لاعبًا في المرة الواحدة مع زر "التالي" بدل تحميل الكل. نفس الفكرة للمالية والمدفوعات. يُسمى هذا "ترقيم الصفحات" وهو تغيير محدود الخطورة.</div></div>
+    </div>
+  </div>
+
+  <!-- Issue 4 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(0,255,156,.12)">🔋</div>
+      <div class="issue-head-text">
+        <div class="title">تحسينات أداء جاهزة لكن معطّلة</div>
+        <div class="sub">يؤثر على: سرعة لوحة التحكم والإحصاءات &nbsp;|&nbsp; <span class="b b-high">عالي · سهل الإصلاح</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">الفريق التقني أعدّ مسبقًا ملفات بيانات محسوبة تُسرّع عرض الأرقام في لوحة التحكم والإحصاءات. لكن التطبيق لا يستخدمها — يُعيد حساب كل شيء من الصفر في كل مرة.</div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">لوحة التحكم والإحصاءات هي أول ما يراه المستخدم. إذا كانت بطيئة في التحميل تترك انطباعًا سيئًا. تفعيل هذه الملفات يُسرّع التحميل بنسبة 60–80٪.</div></div>
+      <div class="row"><div class="label">ماذا لو تُركت؟</div><div class="value">كلما زادت الأكاديميات والبيانات، كلما ازداد وقت تحميل لوحة التحكم. الإصلاح سيصبح أكثر تعقيدًا مع الوقت.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-good">فوري وسهل</span> — التغيير تقني بسيط لا يمس أي وظيفة حالية</div></div>
+    </div>
+  </div>
+
+  <!-- Issue 5 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(255,77,109,.15)">🔐</div>
+      <div class="issue-head-text">
+        <div class="title">ثغرات أمنية صغيرة تحتاج إغلاقًا فوريًا</div>
+        <div class="sub">3 مشاكل أمنية بدرجات متفاوتة &nbsp;|&nbsp; <span class="b b-crit">حرج للإصلاح</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">
+        <strong>أ)</strong> صفحة قديمة معطّلة (onboarding) تحتوي كودًا خاطئًا يُخزّن معرّف الأكاديمية في متصفح المستخدم. هذه الصفحة لا يصل إليها أحد حاليًا، لكن وجودها خطر محتمل.<br/><br/>
+        <strong>ب)</strong> رسالة خطأ تكشف البريد الإلكتروني للشخص المدعو. يمكن لأي شخص استخدامها لمعرفة من دُعي.<br/><br/>
+        <strong>ج)</strong> لا حد أقصى لعدد الدعوات التي يمكن لمالك الأكاديمية إرسالها في وقت قصير.
+      </div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">الثغرة الأولى قد تُستخدم لسرقة بيانات أكاديمية أخرى إذا استُغلّت. الثانية مشكلة خصوصية. الثالثة قد تُستخدم لإرسال آلاف الدعوات كبريد مزعج.</div></div>
+      <div class="row"><div class="label">ماذا لو تُركت؟</div><div class="value">مخاطر أمنية متزايدة مع نمو المنصة. في حالة وجود تقييم أمني أو تدقيق، ستظهر هذه كنقاط حمراء.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-crit">فوري</span> — إصلاحات سريعة لا تؤثر على أي وظيفة حالية</div></div>
+    </div>
+  </div>
+
+  <!-- Issue 6 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(255,209,102,.12)">🏗</div>
+      <div class="issue-head-text">
+        <div class="title">ثلاثة ملفات كود ضخمة تعرقل النمو</div>
+        <div class="sub">يؤثر على: قدرة الفريق على إضافة ميزات جديدة بأمان &nbsp;|&nbsp; <span class="b b-med">متوسط الإلحاح</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">ثلاثة ملفات (اللاعبون، المالية، التقويم) نمت حتى أصبح كل منها أشبه بمبنى بعدة طوابق دون فصل واضح. عند تعديل ميزة واحدة فيها، يصعب التأكد أن التعديل لم يكسر شيئًا آخر داخل نفس الملف.</div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">كلما كان الملف أكبر وأكثر تشابكًا، كلما زاد وقت إضافة الميزات الجديدة، وزادت احتمالية ظهور أخطاء غير متوقعة عند التعديل.</div></div>
+      <div class="row"><div class="label">ماذا لو تُركت؟</div><div class="value">وقت التطوير يتضاعف. الفريق التقني يصبح خائفًا من التعديل. الأخطاء تظهر في أماكن لم تُمسّ. هذه العلامة الكلاسيكية للديون التقنية المتراكمة.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-med">خلال شهر</span> — لا يؤثر على المستخدمين مباشرة لكن يُعيق الفريق التقني</div></div>
+      <div class="row"><div class="label">ملاحظة مهمة</div><div class="value">هذا التغيير يجب أن يحدث بعد توحيد الأدوات المشتركة وبعد إضافة اختبارات. التسرع هنا قد يُعطّل وظائف حالية.</div></div>
+    </div>
+  </div>
+
+  <!-- Issue 7 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(255,209,102,.12)">♻️</div>
+      <div class="issue-head-text">
+        <div class="title">كود مكرّر في أماكن كثيرة</div>
+        <div class="sub">يؤثر على: وقت الإصلاح عند ظهور أي خطأ &nbsp;|&nbsp; <span class="b b-med">متوسط</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">أدوات مشتركة كتنسيق التاريخ وأسماء الأيام وألوان الحالة مكتوبة 3 إلى 15 مرة في صفحات مختلفة. إذا احتاج أحدها تصحيحًا يجب تصحيح كل النسخ يدويًا.</div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">أي خطأ في منطق مشترك يستوجب البحث عن كل النسخ وتصحيحها جميعًا. فرصة ارتكاب الخطأ تتضاعف مع كل نسخة إضافية.</div></div>
+      <div class="row"><div class="label">ماذا لو تُركت؟</div><div class="value">فرق في السلوك بين الصفحات. وقت أطول لإصلاح الأخطاء. مخاطر متزايدة مع كل ميزة جديدة.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-high">خلال 2 أسابيع</span> — الحل بسيط وآمن وضروري قبل أي إضافة جديدة</div></div>
+    </div>
+  </div>
+
+  <!-- Issue 8 -->
+  <div class="issue">
+    <div class="issue-head">
+      <div class="issue-icon" style="background:rgba(0,224,255,.12)">🔔</div>
+      <div class="issue-head-text">
+        <div class="title">الإشعارات لا تصل في الوقت الفعلي</div>
+        <div class="sub">يؤثر على: سرعة الاستجابة للتنبيهات &nbsp;|&nbsp; <span class="b b-low">منخفض الإلحاح</span></div>
+      </div>
+    </div>
+    <div class="issue-body">
+      <div class="row"><div class="label">المشكلة ببساطة</div><div class="value">نظام الإشعارات موجود وجاهز، لكن لتصل الإشعارات يجب تحديث الصفحة. المنصة لا "تُخطر" المستخدم تلقائيًا عند حدوث شيء.</div></div>
+      <div class="row"><div class="label">لماذا تهم؟</div><div class="value">المنصة تبدو ثابتة وغير حيّة. المستخدم يشعر أنه يحتاج لتحديث الصفحة باستمرار لرؤية التحديثات.</div></div>
+      <div class="row"><div class="label">الحل الجاهز</div><div class="value">البنية التقنية كاملة وجاهزة — يحتاج فقط إلى توصيل قناة اتصال مباشر تُرسل الإشعار فور حدوثه. تغيير بسيط وأثره كبير على الإحساس بحيوية المنصة.</div></div>
+      <div class="row"><div class="label">الإلحاح</div><div class="value"><span class="b b-low">خلال 2–3 أشهر</span> — تحسين جودة وليس ضرورة حرجة</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SECTION C+D+E: ACTION PLAN ═══════════════ -->
+<div class="page pb">
+  <div class="sh">
+    <div class="sh-num">ج</div>
+    <div>
+      <div class="sh-title">خطة العمل المُرتَّبة</div>
+      <div class="sh-sub">مُرتَّبة بعناية لحماية الوظائف الحالية أثناء التحسين</div>
+    </div>
+  </div>
+
+  <div class="alert a-info">
+    <strong>مبدأ الحماية الأول</strong>
+    كل تغيير في هذه الخطة مُرتَّب بحيث لا يمس الوظائف الحيوية: المصادقة، الصلاحيات، اللاعبون، المالية، التقويم، الدعوات، والاستخدام على الهاتف. كل مرحلة مبنية على ما قبلها ولا تُفتح حتى تنتهي المرحلة السابقة بسلامة.
+  </div>
+
+  <!-- Phase 1 -->
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num p1">1</div>
+      <div class="phase-head-text">
+        <div class="ph-title">المرحلة الأولى — مكاسب فورية آمنة</div>
+        <div class="ph-sub">الأسبوع الأول · إصلاحات منخفضة الخطورة · أثر فوري على الأمان والأداء</div>
+      </div>
+    </div>
+    <div class="phase-items">
+      <div class="pi"><div class="pi-num">1</div><div class="pi-text"><strong>حذف صفحة onboarding القديمة</strong> — صفحة معطّلة بكود خاطئ، لا يستخدمها أحد، وتُشكّل خطرًا أمنيًا محتملًا. حذفها لا يؤثر على أي وظيفة حالية.</div></div>
+      <div class="pi"><div class="pi-num">2</div><div class="pi-text"><strong>إصلاح موقع شارة الإشعارات</strong> — الشارة تظهر على الجانب الخاطئ في الواجهة العربية. تغيير كلمة واحدة في الكود.</div></div>
+      <div class="pi"><div class="pi-num">3</div><div class="pi-text"><strong>توصيل البيانات المحسوبة مسبقًا بلوحة التحكم</strong> — تُسرّع التحميل 60–80٪. البيانات جاهزة في قاعدة البيانات، يحتاج فقط توجيه الاستعلام نحوها بدل إعادة الحساب.</div></div>
+      <div class="pi"><div class="pi-num">4</div><div class="pi-text"><strong>تصحيح 3 استعلامات بيانات تُصفّي النتائج بطريقة غير كفوءة</strong> — تغيير سطر واحد في كل منها، يُلغي تحميل بيانات زائدة غير ضرورية.</div></div>
+      <div class="pi"><div class="pi-num">5</div><div class="pi-text"><strong>إضافة قيد قاعدة بيانات لمنع ارتباط الفروع بمعرّفات غير موجودة</strong> — يمنع فسادًا صامتًا في البيانات دون أي أثر على الوظائف الحالية.</div></div>
+      <div class="pi"><div class="pi-num">6</div><div class="pi-text"><strong>تعميم رسالة خطأ الدعوة</strong> — إزالة عرض البريد الإلكتروني من رسالة الخطأ. تغيير في جملة واحدة.</div></div>
+      <div class="pi"><div class="pi-num">7</div><div class="pi-text"><strong>تحسين حساب شاشة التقويم</strong> — تغليف عملية حساب الجلسات بطريقة تُقلل إعادة الحساب غير الضروري عند أي تفاعل بسيط مع الصفحة.</div></div>
+      <div class="pi"><div class="pi-num">8</div><div class="pi-text"><strong>تحسين استعلام تحديث لاعبي الفرع</strong> — استبدال 50 طلبًا منفصلًا بطلب قاعدة بيانات واحد يُنجز نفس الشيء. لا أثر على الوظيفة، فقط سرعة أكبر.</div></div>
+    </div>
+  </div>
+
+  <!-- Phase 2 -->
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num p2">2</div>
+      <div class="phase-head-text">
+        <div class="ph-title">المرحلة الثانية — الاستقرار والأساس</div>
+        <div class="ph-sub">الأسبوع 2–4 · بناء الأساس الصحيح قبل أي ميزة جديدة</div>
+      </div>
+    </div>
+    <div class="phase-items">
+      <div class="pi"><div class="pi-num">9</div><div class="pi-text"><strong>توحيد أدوات التاريخ والثوابت المشتركة</strong> — إنشاء ملف مرجعي واحد لكل الأدوات المكرّرة (15+ دالة تاريخ، أسماء الأيام، ألوان الحالة). يجب أن يحدث هذا قبل أي تعديل كبير آخر لأنه يُوطّد الأرض.</div></div>
+      <div class="pi"><div class="pi-num">10</div><div class="pi-text"><strong>إضافة ترقيم الصفحات لقائمة اللاعبين</strong> — تحميل 50 لاعبًا في المرة مع زر "التالي". يحمي المنصة من التباطؤ مع نمو البيانات. يجب اختبار البحث والفلترة بعد التطبيق.</div></div>
+      <div class="pi"><div class="pi-num">11</div><div class="pi-text"><strong>إضافة ترقيم الصفحات للمعاملات المالية</strong> — نفس المبدأ للمالية. حرج جدًا قبل انضمام أي أكاديمية بسجلات مالية كبيرة.</div></div>
+      <div class="pi"><div class="pi-num">12</div><div class="pi-text"><strong>إعادة تصميم التقويم على الهاتف</strong> — عرض يومي رأسي مع تنقل بين الأيام. شاشة الكمبيوتر لا تتغير. هذا أهم إصلاح UX في المرحلة كلها.</div></div>
+      <div class="pi"><div class="pi-num">13</div><div class="pi-text"><strong>تحويل جداول الموبايل إلى بطاقات</strong> — في صفحات اللاعبين والموظفين والفروع. الجدول يبقى على الكمبيوتر. يجب اختبار كل الإجراءات في البطاقة بعد التطبيق.</div></div>
+      <div class="pi"><div class="pi-num">14</div><div class="pi-text"><strong>إضافة فهارس محسّنة في قاعدة البيانات</strong> — إضافة فهارس للاستعلامات الأكثر استخدامًا. يُسرّع البحث دون أي تغيير في الوظائف.</div></div>
+      <div class="pi"><div class="pi-num">15</div><div class="pi-text"><strong>إضافة شروط الصلاحية قبل عرض أزرار التعديل</strong> — المستخدم بصلاحيات محدودة لا يرى أزرار الإنشاء/الحذف أصلًا بدل أن تُظهر خطأً عند الضغط عليها.</div></div>
+      <div class="pi"><div class="pi-num">16</div><div class="pi-text"><strong>إضافة حد أقصى لإنشاء الدعوات</strong> — 10 دعوات في الساعة لكل مالك أكاديمية. يمنع الاستخدام المسيء دون أثر على الاستخدام الطبيعي.</div></div>
+    </div>
+  </div>
+
+  <!-- Phase 3 -->
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num p3">3</div>
+      <div class="phase-head-text">
+        <div class="ph-title">المرحلة الثالثة — التحسين الهيكلي</div>
+        <div class="ph-sub">الشهر الثاني · تفكيك الملفات الكبيرة · رفع جودة تجربة المستخدم</div>
+      </div>
+    </div>
+    <div class="phase-items">
+      <div class="pi"><div class="pi-num">17</div><div class="pi-text"><strong>تفكيك ملف اللاعبين الكبير</strong> — تقسيمه إلى 4–5 ملفات منفصلة. يجب اختبار كل وظيفة (إضافة، تعديل، تجديد، سجل) بعد الانتهاء. <em>لا تُفعَّل على الإنتاج حتى يكتمل اختبار كل الوظائف.</em></div></div>
+      <div class="pi"><div class="pi-num">18</div><div class="pi-text"><strong>تفكيك ملف المالية الكبير</strong> — استخراج جدول المعاملات ونافذة الإضافة وملخص الأرقام في ملفات منفصلة. نفس تحذير اختبار ما قبله.</div></div>
+      <div class="pi"><div class="pi-num">19</div><div class="pi-text"><strong>إنشاء مكوّن نافذة مشترك</strong> — كود النافذة المنبثقة مكرّر 8 مرات. إنشاء نسخة واحدة مشتركة يُوفّر وقتًا طويلًا في كل إضافة مستقبلية.</div></div>
+      <div class="pi"><div class="pi-num">20</div><div class="pi-text"><strong>إضافة هياكل تحميل احترافية</strong> — بدل "جاري التحميل..." يظهر هيكل الصفحة باللون الرمادي ثم تُملأ بالبيانات الحقيقية. يُحسّن الإحساس بالسرعة بشكل كبير.</div></div>
+      <div class="pi"><div class="pi-num">21</div><div class="pi-text"><strong>توسيع مناطق اللمس على الهاتف</strong> — رفع كل الأزرار الصغيرة إلى الحجم القياسي (44px). يُحسّن دقة الاستخدام على الهاتف.</div></div>
+      <div class="pi"><div class="pi-num">22</div><div class="pi-text"><strong>توحيد إدارة الكاش (التخزين المؤقت)</strong> — إنشاء دالة واحدة تُمسح عند تسجيل الخروج بدل 3 دوال منفصلة تُستدعى يدويًا.</div></div>
+    </div>
+  </div>
+
+  <!-- Phase 4 -->
+  <div class="phase">
+    <div class="phase-head">
+      <div class="phase-num p4">4</div>
+      <div class="phase-head-text">
+        <div class="ph-title">المرحلة الرابعة — رفع مستوى المنتج</div>
+        <div class="ph-sub">الشهر 2–4 · ميزات تخلق ميزة تنافسية حقيقية</div>
+      </div>
+    </div>
+    <div class="phase-items">
+      <div class="pi"><div class="pi-num">23</div><div class="pi-text"><strong>تقرير ربحية لكل فرع</strong> — عرض إيرادات كل فرع مقابل تكاليفه بشكل منفصل. البيانات موجودة — يحتاج فقط واجهة جديدة. قيمة عالية جدًا لأصحاب الأكاديميات متعددة الفروع.</div></div>
+      <div class="pi"><div class="pi-num">24</div><div class="pi-text"><strong>"جدِّد الآن" من بطاقة التنبيه مباشرة</strong> — تجديد اشتراك اللاعب في نقرة واحدة بدل 5 خطوات حالية. يُقلّص العمل التشغيلي اليومي بشكل واضح.</div></div>
+      <div class="pi"><div class="pi-num">25</div><div class="pi-text"><strong>مؤشرات الاتجاه في لوحة التحكم</strong> — خط بياني صغير بجانب كل مقياس مالي يُظهر هل هو في ارتفاع أم انخفاض مقارنة بالشهر الماضي. يحوّل لوحة التحكم من "أرقام" إلى "قصة".</div></div>
+      <div class="pi"><div class="pi-num">26</div><div class="pi-text"><strong>إشعارات فورية</strong> — الإشعار يصل فور حدوثه دون الحاجة لتحديث الصفحة. البنية التقنية جاهزة كاملًا — تغيير واحد يُفعّلها.</div></div>
+      <div class="pi"><div class="pi-num">27</div><div class="pi-text"><strong>معدل حضور اللاعب مرئي مباشرة</strong> — "أحمد: 18/24 جلسة (75٪)" على بطاقة اللاعب مباشرة دون الدخول لصفحة الحضور.</div></div>
+      <div class="pi"><div class="pi-num">28</div><div class="pi-text"><strong>إجراءات جماعية على اللاعبين</strong> — تحديد مجموعة لاعبين وتجديدهم أو إرسال رسالة لهم دفعة واحدة. يوفّر ساعات عمل في الأكاديميات الكبيرة.</div></div>
+      <div class="pi"><div class="pi-num">29</div><div class="pi-text"><strong>تقرير شهري قابل للطباعة والمشاركة</strong> — ملخص شهري جميل للإيرادات والمصروفات والحضور قابل للطباعة أو الإرسال للشركاء. وضع الطباعة موجود بالفعل — يحتاج تصميم احترافي فقط.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ FULL DECISION TABLE ═══════════════ -->
+<div class="page pb">
+  <div class="sh">
+    <div class="sh-num">د</div>
+    <div>
+      <div class="sh-title">جدول القرار الكامل</div>
+      <div class="sh-sub">29 بندًا مرتبة حسب الأولوية مع كل التفاصيل اللازمة للقرار</div>
+    </div>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>ماذا يجب تغييره</th>
+          <th>السبب</th>
+          <th>الأولوية</th>
+          <th>مستوى الخطر</th>
+          <th>الأثر على الوظائف الحالية</th>
+          <th>التوقيت</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><strong>حذف صفحة onboarding</strong></td>
+          <td>ثغرة أمنية، import مكسور، لا يستخدمها أحد</td>
+          <td><span class="b b-crit">حرج</span></td>
+          <td>صفر</td>
+          <td>لا يوجد — الصفحة معطّلة</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><strong>إصلاح موقع شارة الإشعار في RTL</strong></td>
+          <td>تظهر على الجانب الخاطئ</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>صفر</td>
+          <td>تجميلي فقط، لا يمس المنطق</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><strong>توصيل بيانات محسوبة مسبقًا بلوحة التحكم</strong></td>
+          <td>تُسرّع التحميل 60–80٪ دون أي كود جديد</td>
+          <td><span class="b b-crit">حرج</span></td>
+          <td>منخفض جدًا</td>
+          <td>لوحة التحكم والإحصاءات فقط — أسرع</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><strong>تصحيح فلترة الجلسات في قاعدة البيانات</strong></td>
+          <td>يُحمَّل كل الشهر ثم يُصفَّى يدويًا</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>صفر</td>
+          <td>أسرع، نفس النتيجة</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><strong>قيد قاعدة بيانات للفروع</strong></td>
+          <td>يمنع ارتباط بمعرّفات فروع وهمية</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>منخفض</td>
+          <td>يمنع إدراج بيانات خاطئة فقط</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td><strong>تعميم رسالة خطأ الدعوة</strong></td>
+          <td>تكشف البريد الإلكتروني للمدعو</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>صفر</td>
+          <td>رسالة مختلفة فقط</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td><strong>تحسين حساب التقويم (useMemo)</strong></td>
+          <td>يُعاد الحساب عند كل تفاعل بلا داعٍ</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>صفر</td>
+          <td>أسرع، نفس النتيجة</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td><strong>تحديث لاعبي الفرع بطلب واحد</strong></td>
+          <td>50 طلب منفصل بدل طلب واحد</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>منخفض</td>
+          <td>نفس النتيجة لكن أسرع بكثير</td>
+          <td>الأسبوع الأول</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td><strong>توحيد أدوات التاريخ والثوابت</strong></td>
+          <td>15+ دالة مكرّرة، خطر عند أي إصلاح</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>منخفض</td>
+          <td>لا يمس الوظائف — توحيد داخلي فقط</td>
+          <td>الأسبوع 2</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td><strong>ترقيم صفحات اللاعبين</strong></td>
+          <td>كل اللاعبين يُحمَّلون دفعة واحدة</td>
+          <td><span class="b b-crit">حرج</span></td>
+          <td>متوسط</td>
+          <td>يجب اختبار البحث والفلترة بعده</td>
+          <td>الأسبوع 2–3</td>
+        </tr>
+        <tr>
+          <td>11</td>
+          <td><strong>ترقيم صفحات المالية</strong></td>
+          <td>نمو البيانات سيُبطّئ الصفحة</td>
+          <td><span class="b b-crit">حرج</span></td>
+          <td>متوسط</td>
+          <td>يجب اختبار الفلاتر والتصدير بعده</td>
+          <td>الأسبوع 2–3</td>
+        </tr>
+        <tr>
+          <td>12</td>
+          <td><strong>إعادة تصميم التقويم للموبايل</strong></td>
+          <td>غير قابل للاستخدام على الهاتف</td>
+          <td><span class="b b-crit">حرج</span></td>
+          <td>متوسط</td>
+          <td>يجب اختبار الإلغاء والاستعادة على الهاتف</td>
+          <td>الأسبوع 3–4</td>
+        </tr>
+        <tr>
+          <td>13</td>
+          <td><strong>بطاقات بديلة للجداول على الموبايل</strong></td>
+          <td>الجداول مقطوعة على الهاتف</td>
+          <td><span class="b b-crit">حرج</span></td>
+          <td>متوسط</td>
+          <td>يجب اختبار كل إجراء من البطاقة</td>
+          <td>الأسبوع 3–4</td>
+        </tr>
+        <tr>
+          <td>14</td>
+          <td><strong>فهارس قاعدة بيانات إضافية</strong></td>
+          <td>استعلامات مالية وحضور بطيئة</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>منخفض جدًا</td>
+          <td>أسرع فقط، لا تغيير في النتائج</td>
+          <td>الأسبوع 2</td>
+        </tr>
+        <tr>
+          <td>15</td>
+          <td><strong>إخفاء أزرار الإجراء حسب الصلاحية</strong></td>
+          <td>مستخدمون محدودو الصلاحية يرون أزرارًا لا تعمل</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>منخفض</td>
+          <td>يُحسّن UX دون مساس بالمنطق</td>
+          <td>الأسبوع 3</td>
+        </tr>
+        <tr>
+          <td>16</td>
+          <td><strong>حد أقصى للدعوات</strong></td>
+          <td>لا حماية من الاستخدام المسيء</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>منخفض</td>
+          <td>لا أثر على الاستخدام الطبيعي</td>
+          <td>الأسبوع 3–4</td>
+        </tr>
+        <tr>
+          <td>17</td>
+          <td><strong>تفكيك ملف اللاعبين</strong></td>
+          <td>1000+ سطر يُصعّب أي تعديل</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>عالٍ — يجب اختبار كل شيء</td>
+          <td>يجب اختبار كامل للإضافة والتعديل والحذف والسجل</td>
+          <td>الشهر الثاني</td>
+        </tr>
+        <tr>
+          <td>18</td>
+          <td><strong>تفكيك ملف المالية</strong></td>
+          <td>1000+ سطر معقّد</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>عالٍ</td>
+          <td>يجب اختبار المعاملات والتصفية والطباعة</td>
+          <td>الشهر الثاني</td>
+        </tr>
+        <tr>
+          <td>19</td>
+          <td><strong>مكوّن نافذة مشترك</strong></td>
+          <td>الكود مكرّر 8 مرات</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>منخفض</td>
+          <td>لا يمس المنطق — تحسين داخلي</td>
+          <td>الشهر الثاني</td>
+        </tr>
+        <tr>
+          <td>20</td>
+          <td><strong>هياكل تحميل احترافية</strong></td>
+          <td>انزياح التصميم عند الفتح</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>منخفض جدًا</td>
+          <td>تجميلي فقط</td>
+          <td>الشهر الثاني</td>
+        </tr>
+        <tr>
+          <td>21</td>
+          <td><strong>توسيع مناطق اللمس للهاتف</strong></td>
+          <td>أزرار صغيرة يصعب الضغط عليها</td>
+          <td><span class="b b-high">عالي</span></td>
+          <td>منخفض</td>
+          <td>تجميلي وظيفي — لا مساس بالمنطق</td>
+          <td>الشهر الثاني</td>
+        </tr>
+        <tr>
+          <td>22</td>
+          <td><strong>توحيد إدارة الكاش</strong></td>
+          <td>3 دوال منفصلة قد تُنسى</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>منخفض</td>
+          <td>يجب اختبار تسجيل الخروج بعده</td>
+          <td>الشهر الثاني</td>
+        </tr>
+        <tr>
+          <td>23</td>
+          <td><strong>تقرير ربحية لكل فرع</strong></td>
+          <td>لا رؤية مالية على مستوى الفرع</td>
+          <td><span class="b b-high">عالي للمنتج</span></td>
+          <td>منخفض</td>
+          <td>إضافة جديدة — لا تمس الموجود</td>
+          <td>الشهر 2–3</td>
+        </tr>
+        <tr>
+          <td>24</td>
+          <td><strong>"جدِّد الآن" من بطاقة التنبيه</strong></td>
+          <td>التجديد يتطلب 5 خطوات حاليًا</td>
+          <td><span class="b b-high">عالي للمنتج</span></td>
+          <td>منخفض</td>
+          <td>إضافة — لا تمس منطق التجديد الحالي</td>
+          <td>الشهر 2–3</td>
+        </tr>
+        <tr>
+          <td>25</td>
+          <td><strong>مؤشرات الاتجاه في لوحة التحكم</strong></td>
+          <td>لا مقارنة شهرية حاليًا</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>منخفض</td>
+          <td>إضافة بصرية فقط</td>
+          <td>الشهر 3</td>
+        </tr>
+        <tr>
+          <td>26</td>
+          <td><strong>إشعارات فورية</strong></td>
+          <td>الإشعارات تحتاج تحديث الصفحة</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>منخفض</td>
+          <td>البنية جاهزة — تفعيل قناة فقط</td>
+          <td>الشهر 3</td>
+        </tr>
+        <tr>
+          <td>27</td>
+          <td><strong>معدل الحضور على بطاقة اللاعب</strong></td>
+          <td>يتطلب دخول صفحة فرعية لرؤيته</td>
+          <td><span class="b b-low">منخفض</span></td>
+          <td>منخفض</td>
+          <td>إضافة عرض فقط</td>
+          <td>الشهر 3</td>
+        </tr>
+        <tr>
+          <td>28</td>
+          <td><strong>إجراءات جماعية على اللاعبين</strong></td>
+          <td>العمليات الجماعية تستغرق وقتًا</td>
+          <td><span class="b b-med">متوسط</span></td>
+          <td>متوسط</td>
+          <td>يجب اختبار حالات التعارض</td>
+          <td>الشهر 3–4</td>
+        </tr>
+        <tr>
+          <td>29</td>
+          <td><strong>تقرير شهري قابل للطباعة</strong></td>
+          <td>يُوفّر وقت إعداد التقارير اليدوية</td>
+          <td><span class="b b-low">منخفض</span></td>
+          <td>منخفض</td>
+          <td>وضع طباعة موجود — تحسين تصميمي</td>
+          <td>الشهر 3–4</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ SECTION F: RISKY REFACTORS WARNING ═══════════════ -->
+<div class="page pb">
+  <div class="sh">
+    <div class="sh-num">هـ</div>
+    <div>
+      <div class="sh-title">تحذيرات الإصلاح الخطرة</div>
+      <div class="sh-sub">ما الذي يجب اختباره قبل التغيير · ما الذي لا يُمسّ مبكرًا</div>
+    </div>
+  </div>
+
+  <div class="alert a-crit">
+    <strong>قاعدة أساسية لا تُكسر</strong>
+    أي تغيير في الكود يجب أن يمر بثلاثة أشياء قبل النشر على الإنتاج:
+    اختبار كل الوظائف المتأثرة يدويًا · مراجعة من مطور آخر · استعداد للتراجع الفوري
+  </div>
+
+  <!-- Risky: Players -->
+  <div class="warn">
+    <h3>⚠ تفكيك ملف اللاعبين — أعلى مستوى خطر</h3>
+    <p>ملف اللاعبين يتحكم في: إضافة وتعديل وحذف اللاعبين · رفع صور الملف الشخصي · إنشاء الدفعات · سجل الاشتراكات · اكتشاف التكرار · تعديل الجلسات.</p>
+    <strong style="color:var(--yellow);display:block;margin-bottom:8px">قبل أي تغيير هنا يجب:</strong>
+    <ul>
+      <li>التحقق من أن إضافة لاعب جديد تعمل بشكل صحيح</li>
+      <li>التحقق من أن الدفعة تُنشأ عند التجديد</li>
+      <li>التحقق من أن سجل الاشتراك يُسجَّل بشكل صحيح</li>
+      <li>التحقق من أن تمديد الجلسات يعمل</li>
+      <li>التحقق من أن رفع الصورة يعمل</li>
+      <li><strong>لا تنشره على الإنتاج حتى تكتمل كل هذه الاختبارات</strong></li>
+    </ul>
+    <p style="margin:12px 0 0;color:var(--muted)"><em>ما يجب فحصه أولًا: هل يوجد اختبارات موجودة؟ هل هناك بيئة اختبار منفصلة؟</em></p>
+  </div>
+
+  <!-- Risky: Finance -->
+  <div class="warn">
+    <h3>⚠ تفكيك ملف المالية — خطر على البيانات</h3>
+    <p>المالية تتحكم في: إنشاء وتعديل وحذف المعاملات · ربط المعاملات بالفروع · وضع الطباعة · ربط الراتب بالحضور · ربط الاشتراك بالدفعات.</p>
+    <strong style="color:var(--yellow);display:block;margin-bottom:8px">قبل أي تغيير هنا يجب:</strong>
+    <ul>
+      <li>اختبار إضافة معاملة جديدة (إيراد وصرف)</li>
+      <li>اختبار تصفية المعاملات حسب الشهر والفرع</li>
+      <li>اختبار أن ربط الراتب بالحضور لا يزال صحيحًا</li>
+      <li>اختبار وضع الطباعة</li>
+      <li><strong>لا تُعدِّل منطق الربط بين الرواتب والحضور — هذا الجزء الأكثر تشابكًا</strong></li>
+    </ul>
+  </div>
+
+  <!-- Risky: Pagination -->
+  <div class="warn">
+    <h3>⚠ ترقيم الصفحات — يغيّر طريقة عرض البيانات</h3>
+    <p>إضافة ترقيم الصفحات تُغيّر كيف تُعرض بيانات اللاعبين والمعاملات. إذا لم تُعدَّل الفلاتر والبحث بشكل صحيح قد يختفي بعض البيانات بشكل مؤقت.</p>
+    <strong style="color:var(--yellow);display:block;margin-bottom:8px">قبل النشر يجب اختبار:</strong>
+    <ul>
+      <li>البحث بالاسم — هل يبحث في كل البيانات أم في الصفحة الحالية فقط؟</li>
+      <li>الفلترة — هل تعمل عبر كل الصفحات؟</li>
+      <li>الترتيب — هل يبقى ثابتًا عند التنقل بين الصفحات؟</li>
+      <li>الإجمالي — هل يعرض عدد اللاعبين الكلي بشكل صحيح؟</li>
+    </ul>
+  </div>
+
+  <!-- What not to touch early -->
+  <h2 style="margin-top:32px">🚫 ما لا يُمسّ في المراحل الأولى</h2>
+  <div class="card">
+    <ul class="xk">
+      <li><strong>منطق إلغاء الجلسات واستعادتها:</strong> يعمل بشكل صحيح مع إمكانية التراجع. أي تغيير غير محسوب فيه قد يكسر حسابات التعويض.</li>
+      <li><strong>سياسات أمان قاعدة البيانات (RLS):</strong> هذا هو الحارس الحقيقي للبيانات. لا تُعدِّلها إلا إذا كان هناك سبب واضح ومحدد.</li>
+      <li><strong>منطق resolveAcademyId:</strong> نظام تخزين معرّف الأكاديمية المؤقت يعمل بكفاءة عالية. الاستبدال غير الحذر يُسبب مشاكل في تعريف الهوية.</li>
+      <li><strong>نظام الدعوات والقبول:</strong> منطق الأمان فيه دقيق. لا تعدّله إلا لإصلاحات أمنية محددة بعد مراجعة دقيقة.</li>
+      <li><strong>isPlayerActiveOnDate:</strong> الدالة الرئيسية لتحديد نشاط اللاعب. كل منطق التعويض يعتمد عليها — لا تُعدّلها دون فهم كامل لكل التأثيرات.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════ STRATEGIC FINAL ═══════════════ -->
+<div class="page pb">
+  <div class="sh">
+    <div class="sh-num">و</div>
+    <div>
+      <div class="sh-title">التوصية الاستراتيجية النهائية</div>
+      <div class="sh-sub">ماذا نفعل بالضبط — بالترتيب الصحيح</div>
+    </div>
+  </div>
+
+  <div class="final">
+    <h3>إذا كنت تقود هذا المنتج، هذا ما سأفعله بالضبط</h3>
+    <p>
+      المنصة تمتلك أساسًا تقنيًا سليمًا وبنية أمان صحيحة. الفجوة بين وضعها الحالي وما يمكن أن تكونه ليست ضعفًا في التصميم — هي مسألة ترتيب التنفيذ.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">الأسبوع الأول — أوقف النزيف</div>
+    <p>ثلاثة أيام على البنود الثمانية الفورية. معظمها تغييرات بسطر واحد. ستُغلق الثغرات الأمنية، وتُسرّع لوحة التحكم، وتُصلح الإشعارات. تكلفة منخفضة جدًا، أثر فوري قابل للقياس.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">الأسبوع الثاني والثالث — وحِّد الأساس</div>
+    <p>قبل كتابة أي كود جديد، أنشئ ملفات الأدوات المشتركة (التاريخ، الثوابت). هذه الخطوة تُلغي أكبر مصدر للمخاطر في المشروع. أي ميزة جديدة تُبنى قبلها ستزيد التكرار.</p>
+    <div class="alert a-info">
+      <strong>القاعدة الذهبية:</strong> لا تضف ميزة جديدة والأدوات المشتركة مبعثرة. كل صفحة جديدة تُضيف نسخة أخرى من المشكلة.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">الأسبوع الثالث والرابع — اصلح الموبايل</div>
+    <p>التقويم لا يعمل على الهاتف هي أكبر مشكلة تشغيلية يراها المستخدمون يوميًا. إصلاحها مع إصلاح جداول الهاتف سيُغيّر الانطباع عن المنصة جذريًا لأي مستخدم يعتمد على هاتفه.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">الشهر الثاني — فكِّك الملفات الكبيرة</div>
+    <p>مع توحيد الأدوات، تفكيك ملف اللاعبين يصبح أسرع وأأمن. ابدأ باللاعبين ثم المالية. لا تُنشرهما على الإنتاج حتى تكتمل كل الاختبارات. هذه الخطوة تُفتح الباب لإضافة أي ميزة جديدة بسرعة وأمان.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">الشهر الثاني والثالث — ارفع مستوى المنتج</div>
+    <p>بمجرد استقرار الكود والموبايل، استثمر في الميزات التي تخلق ميزة تنافسية حقيقية: تقرير ربحية الفروع، "جدِّد الآن" من التنبيه مباشرة، والإشعارات الفورية. هذه ميزات لا توجد في الحلول العامة وتجعل المنصة متميزة فعلًا.</p>
+  </div>
+
+  <div class="alert a-med">
+    <strong>ما لا يجب فعله:</strong>
+    إعادة بناء كاملة · تغيير كل شيء دفعة واحدة · البدء ببناء ميزات جديدة (رياضات متعددة، بوابة أولياء الأمور) بينما الموبايل مكسور على الشاشات الأساسية · تعديل أنظمة الأمان دون خبرة عميقة بتفاصيلها.
+  </div>
+
+  <div class="final" style="margin-top:32px">
+    <h3>خلاصة واحدة للمؤسس</h3>
+    <p>
+      المنصة جيدة ولديها أساس صحيح. المستخدمون يعانون الآن من ثلاثة أشياء: التقويم على الهاتف، جداول الهاتف، وبطء التحميل. هذه تُحلّ في شهر واحد.
+    </p>
+    <p>
+      على المدى المتوسط، الخطر الأكبر هو نمو البيانات بدون ترقيم صفحات — حلّه سهل لكن وقته الآن وليس لاحقًا.
+    </p>
+    <p style="margin-bottom:0">
+      <strong style="color:var(--accent)">الأسبوع الأول:</strong> أغلق الثغرات وسرّع لوحة التحكم. <strong style="color:var(--accent)">الأسبوع 2–3:</strong> وحِّد الأدوات المشتركة. <strong style="color:var(--accent)">الأسبوع 3–4:</strong> أصلح الموبايل. <strong style="color:var(--accent)">الشهر 2:</strong> فكِّك الملفات الكبيرة. <strong style="color:var(--accent)">الشهر 2–3:</strong> أضف الميزات التنافسية. هذا الترتيب يحمي ما يعمل ويبني ما يحتاج بناء.
+    </p>
+  </div>
+
+  <div class="sep"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px">
+    <div>AcademyBase — تقرير القرار التنفيذي للمؤسس</div>
+    <div>29 مارس 2026 · سري · للاستخدام الداخلي</div>
+  </div>
+</div>
+
+</body>
+</html>

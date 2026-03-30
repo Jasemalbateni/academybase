@@ -1,6 +1,20 @@
 import { createClient } from "./browser";
 import { resolveAcademyId } from "./academyId";
 
+// ── Session-scoped membership cache ────────────────────────────────────────────
+//
+// Same pattern as resolveAcademyId(): one in-flight Promise shared across all
+// concurrent callers. Cleared on sign-out via clearMembershipCache().
+// Role / permissions never change mid-session, so caching for the session
+// lifetime is safe.
+
+let _membershipCache: Promise<MembershipInfo> | null = null;
+
+export function clearMembershipCache(): void {
+  _membershipCache = null;
+}
+
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type UserRole = "owner" | "partner" | "branch_manager" | "admin_staff";
@@ -24,12 +38,23 @@ export type MembershipInfo = {
 
 /**
  * Returns full membership info for the current browser-session user.
- * Falls back to the most restrictive role when no session or no membership row.
+ * Result is cached for the lifetime of the browser session (cleared on sign-out).
  *
  * Uses resolveAcademyId() so the profiles round-trip is shared with all other
  * lib functions that call it concurrently — only one DB query fires per session.
  */
-export async function getMembership(): Promise<MembershipInfo> {
+export function getMembership(): Promise<MembershipInfo> {
+  if (!_membershipCache) {
+    _membershipCache = _fetchMembership().catch((e) => {
+      // Clear so the next caller retries instead of seeing a stale rejection.
+      _membershipCache = null;
+      throw e;
+    });
+  }
+  return _membershipCache;
+}
+
+async function _fetchMembership(): Promise<MembershipInfo> {
   const supabase = createClient();
 
   // getSession() reads the in-memory/cookie session — no network call.

@@ -21,6 +21,13 @@ export type DbCalendarEvent = {
   created_at: string;
   /** True when this training event was flagged to consume a session from eligible حصص players. */
   deduct_sessions: boolean;
+  /**
+   * For event_type="canceled": the exact player IDs whose subscriptions were
+   * extended when this session was cancelled (from extendBranchPlayersByOneSession).
+   * Used by the restore flow to reverse precisely those players.
+   * Empty array for sessions cancelled before migration 30.
+   */
+  compensated_player_ids: string[];
 };
 
 export type CalendarEventInsert = {
@@ -31,6 +38,8 @@ export type CalendarEventInsert = {
   note?: string | null;
   /** Persist deduction intent so deletes can restore consumed sessions. */
   deduct_sessions?: boolean;
+  /** Player IDs compensated during cancellation — store for reliable restore reversal. */
+  compensated_player_ids?: string[];
 };
 
 export const eventTypeLabel: Record<CalendarEventType, string> = {

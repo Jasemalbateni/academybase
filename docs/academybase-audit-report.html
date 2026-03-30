@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AcademyBase — Full Product &amp; Technical Audit 2026</title>
+  <style>
+    :root {
+      --bg-primary:    #0b1220;
+      --bg-card:       #161a30;
+      --bg-surface:    #1a2035;
+      --bg-highlight:  #1e2640;
+      --accent-green:  #00ff9c;
+      --accent-blue:   #00e0ff;
+      --accent-amber:  #fbbf24;
+      --accent-red:    #f87171;
+      --accent-purple: #a78bfa;
+      --text-primary:  #f4f4f9;
+      --text-secondary:rgba(255,255,255,0.65);
+      --text-muted:    rgba(255,255,255,0.35);
+      --border:        rgba(255,255,255,0.06);
+      --border-soft:   rgba(255,255,255,0.10);
+      --shadow:        0 4px 32px rgba(0,0,0,0.5);
+      --glow-green:    0 0 32px rgba(0,255,156,0.12);
+      --glow-blue:     0 0 32px rgba(0,224,255,0.10);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', 'Arial', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.75;
+      font-size: 14px;
+      direction: rtl;
+    }
+
+    /* ── Page wrapper ─────────────────────────────────────── */
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 40px;
+    }
+
+    /* ── Cover ────────────────────────────────────────────── */
+    .cover {
+      min-height: 260px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-bottom: 1px solid var(--border-soft);
+      margin-bottom: 56px;
+      padding-bottom: 48px;
+      position: relative;
+    }
+    .cover::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0;
+      width: 180px; height: 2px;
+      background: linear-gradient(90deg, var(--accent-green), transparent);
+    }
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,255,156,0.08);
+      border: 1px solid rgba(0,255,156,0.20);
+      border-radius: 24px;
+      padding: 5px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent-green);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      width: fit-content;
+    }
+    .cover-badge::before { content: '◉'; font-size: 9px; }
+    .cover h1 {
+      font-size: 38px;
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #f4f4f9 30%, rgba(255,255,255,0.55));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 14px;
+    }
+    .cover-sub {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 560px;
+      line-height: 1.6;
+    }
+    .cover-meta {
+      display: flex;
+      gap: 32px;
+      margin-top: 28px;
+      flex-wrap: wrap;
+    }
+    .meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .meta-value { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+
+    /* ── ToC ──────────────────────────────────────────────── */
+    .toc {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 56px;
+      box-shadow: var(--shadow);
+    }
+    .toc-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .toc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 24px;
+    }
+    .toc-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .toc-item:last-child { border-bottom: none; }
+    .toc-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-green);
+      min-width: 20px;
+    }
+
+    /* ── Section ──────────────────────────────────────────── */
+    .section { margin-bottom: 56px; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .section-num {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: rgba(0,255,156,0.10);
+      border: 1px solid rgba(0,255,156,0.22);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800;
+      color: var(--accent-green);
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .section-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      line-height: 1.6;
+      max-width: 700px;
+    }
+
+    /* ── Card ─────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 28px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .card-accent-green { border-left: 3px solid var(--accent-green); }
+    .card-accent-blue  { border-left: 3px solid var(--accent-blue); }
+    .card-accent-amber { border-left: 3px solid var(--accent-amber); }
+    .card-accent-red   { border-left: 3px solid var(--accent-red); }
+    .card-accent-purple{ border-left: 3px solid var(--accent-purple); }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-body {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.75;
+    }
+    .card-body p { margin-bottom: 8px; }
+    .card-body p:last-child { margin-bottom: 0; }
+
+    /* ── Tag / Badge ──────────────────────────────────────── */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .tag-red    { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+    .tag-amber  { background: rgba(251,191,36,0.12);  color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+    .tag-green  { background: rgba(0,255,156,0.10);   color: #00ff9c; border: 1px solid rgba(0,255,156,0.22); }
+    .tag-blue   { background: rgba(0,224,255,0.10);   color: #00e0ff; border: 1px solid rgba(0,224,255,0.22); }
+    .tag-purple { background: rgba(167,139,250,0.12); color: #a78bfa; border: 1px solid rgba(167,139,250,0.25); }
+
+    /* ── Divider ──────────────────────────────────────────── */
+    hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+    /* ── List ─────────────────────────────────────────────── */
+    ul.dot-list { list-style: none; padding: 0; }
+    ul.dot-list li {
+      position: relative;
+      padding-right: 18px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.65;
+    }
+    ul.dot-list li::before {
+      content: '›';
+      position: absolute;
+      right: 0;
+      color: var(--accent-green);
+      font-weight: 700;
+    }
+
+    /* ── Code span ────────────────────────────────────────── */
+    code {
+      background: rgba(0,255,156,0.07);
+      border: 1px solid rgba(0,255,156,0.15);
+      border-radius: 5px;
+      padding: 1px 6px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 11.5px;
+      color: #7effc4;
+      direction: ltr;
+      display: inline-block;
+    }
+
+    /* ── Flow diagram ─────────────────────────────────────── */
+    .flow {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      padding: 20px 24px;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      color: #7effc4;
+      line-height: 2;
+      direction: ltr;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+    .flow .comment { color: rgba(255,255,255,0.35); }
+    .flow .arrow   { color: var(--accent-blue); }
+    .flow .node    { color: #f4f4f9; font-weight: 600; }
+    .flow .dim     { color: rgba(255,255,255,0.40); }
+
+    /* ── Table ────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    thead tr {
+      background: rgba(0,255,156,0.06);
+      border-bottom: 1px solid rgba(0,255,156,0.18);
+    }
+    thead th {
+      padding: 10px 14px;
+      text-align: right;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent-green);
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td {
+      padding: 10px 14px;
+      color: var(--text-secondary);
+      vertical-align: top;
+      line-height: 1.6;
+    }
+    tbody td:first-child { color: var(--text-primary); font-weight: 600; }
+
+    /* ── Priority table ───────────────────────────────────── */
+    .pri-high   { color: #f87171; font-weight: 700; }
+    .pri-med    { color: #fbbf24; font-weight: 700; }
+    .pri-low    { color: #00ff9c; font-weight: 700; }
+
+    /* ── Callout ──────────────────────────────────────────── */
+    .callout {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: rgba(0,255,156,0.05);
+      border: 1px solid rgba(0,255,156,0.15);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+    .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+    .callout-text { font-size: 13px; color: var(--text-secondary); line-height: 1.65; }
+    .callout-text strong { color: var(--text-primary); }
+    .callout-warn {
+      background: rgba(251,191,36,0.05);
+      border-color: rgba(251,191,36,0.18);
+    }
+    .callout-err {
+      background: rgba(248,113,113,0.05);
+      border-color: rgba(248,113,113,0.18);
+    }
+
+    /* ── Numbered item ────────────────────────────────────── */
+    .numbered-item {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .num-badge {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: var(--bg-highlight);
+      border: 1px solid var(--border-soft);
+      font-size: 11px; font-weight: 800;
+      color: var(--accent-green);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .num-content { flex: 1; }
+    .num-title {
+      font-size: 14px; font-weight: 700;
+      margin-bottom: 5px;
+      color: var(--text-primary);
+    }
+    .num-body { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+
+    /* ── Grid 2col ────────────────────────────────────────── */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Stats row ────────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 16px;
+      text-align: center;
+    }
+    .stat-num {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--accent-green);
+      display: block;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Section page-break helper ────────────────────────── */
+    .page-break { page-break-before: always; }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    .footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .footer-brand { color: var(--accent-green); font-weight: 700; }
+
+    /* ── Print / PDF ──────────────────────────────────────── */
+    @media print {
+      body { background: #0b1220 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .page { padding: 32px 28px; }
+      .section { page-break-inside: avoid; }
+      .card { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ══════════════════════════════════════════════════════════
+       COVER
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="cover">
+    <div class="cover-badge">تقرير تدقيق شامل · 2026</div>
+    <h1>AcademyBase<br/>Full Product &amp; Technical Audit</h1>
+    <p class="cover-sub">
+      تحليل معمّق لبنية النظام، تدفق البيانات، سلامة المنطق، تجربة المستخدم،
+      والأداء — مع توصيات مُرتّبة حسب الأولوية لتحويل المنصة إلى منتج SaaS متميّز.
+    </p>
+    <div class="cover-meta">
+      <div class="meta-item"><span class="meta-label">المنصة</span><span class="meta-value">AcademyBase SaaS</span></div>
+      <div class="meta-item"><span class="meta-label">التقنيات</span><span class="meta-value">Next.js 16 · Supabase · TypeScript</span></div>
+      <div class="meta-item"><span class="meta-label">تاريخ التقرير</span><span class="meta-value">مارس 2026</span></div>
+      <div class="meta-item"><span class="meta-label">نوع التدقيق</span><span class="meta-value">تقني · منتج · UX</span></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SUMMARY STATS
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="stat-num">10</span>
+      <span class="stat-label">نقاط ضعف تقنية</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:var(--accent-blue)">12</span>
+      <span class="stat-label">مشكلة في تجربة المستخدم</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:var(--accent-amber)">7</span>
+      <span class="stat-label">مخاطر في منطق البيانات</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:var(--accent-red)">7</span>
+      <span class="stat-label">مخاطر الأداء</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       TABLE OF CONTENTS
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="toc">
+    <div class="toc-title">محتويات التقرير</div>
+    <div class="toc-grid">
+      <div class="toc-item"><span class="toc-num">01</span> نظرة عامة على النظام</div>
+      <div class="toc-item"><span class="toc-num">02</span> نقاط الضعف الرئيسية</div>
+      <div class="toc-item"><span class="toc-num">03</span> مشكلات تجربة المستخدم</div>
+      <div class="toc-item"><span class="toc-num">04</span> مخاطر البيانات والمنطق</div>
+      <div class="toc-item"><span class="toc-num">05</span> مخاطر الأداء والقابلية للتوسع</div>
+      <div class="toc-item"><span class="toc-num">06</span> التحسينات عالية الأثر</div>
+      <div class="toc-item"><span class="toc-num">07</span> التوصيات الاستراتيجية</div>
+      <div class="toc-item"><span class="toc-num">—</span> جدول الأولويات</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SECTION 1 — SYSTEM OVERVIEW
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">01</div>
+      <div>
+        <div class="section-title">نظرة عامة على النظام</div>
+        <div class="section-desc">كيف تترابط الصفحات والمكونات والوحدات — وتدفق البيانات بين جميع أجزاء النظام</div>
+      </div>
+    </div>
+
+    <!-- Topology -->
+    <div class="card card-accent-green">
+      <div class="card-title">🗂 بنية البيانات الأساسية</div>
+      <div class="flow">
+<span class="node">academies</span>
+  <span class="arrow">└─</span> <span class="node">branches</span>         <span class="dim">(price, days[], subscription_mode, rent_type, monthly_rent)</span>
+       <span class="arrow">├─</span> <span class="node">players</span>         <span class="dim">(subscription_mode, sessions, start_date, end_date, is_paused)</span>
+       <span class="arrow">├─</span> <span class="node">staff</span>           <span class="dim">(monthly_salary, branch_ids[], assign_mode)</span>
+       <span class="arrow">├─</span> <span class="node">calendar_events</span> <span class="dim">(training/match/canceled/special_event, deduct_sessions)</span>
+       <span class="arrow">├─</span> <span class="node">sessions</span>        <span class="dim">(status: scheduled/cancelled/completed — finance source of truth)</span>
+       <span class="arrow">├─</span> <span class="node">attendance</span>      <span class="dim">(player daily presence)</span>
+       <span class="arrow">└─</span> <span class="node">staff_attendance</span><span class="dim">(present/late/absent/vacation/excused/no_training)</span>
+
+<span class="node">payments</span>   <span class="dim">(player_id, kind: new/renew/legacy, subscription_end)</span>
+<span class="node">finance_tx</span> <span class="dim">(auto_key, source, branch_id TEXT, category, amount)</span>
+<span class="node">insights</span>   <span class="dim">(pure computation — no DB table, derived from all above)</span>
+      </div>
+    </div>
+
+    <!-- Cross-module flow -->
+    <div class="card card-accent-blue">
+      <div class="card-title">🔗 تدفق البيانات عبر الوحدات — سلسلة إلغاء التدريب</div>
+      <div class="card-body">
+        <p>تُعدّ سلسلة إلغاء التدريب من التقويم الأكثر تعقيدًا في النظام. عند إلغاء جلسة تدريبية واحدة، تُنفَّذ <strong>6 عمليات غير متزامنة</strong> بشكل متتابع:</p>
+      </div>
+      <div class="flow">
+1. <span class="node">upsertSession()</span>        <span class="arrow">→</span> <span class="dim">sessions.status = "cancelled"</span>
+2. <span class="node">syncSessionFieldFinance()</span> <span class="arrow">→</span> <span class="dim">suppresses/zeroes field cost in finance_tx</span>
+3. <span class="node">syncRentAggregateForBranch()</span> <span class="arrow">→</span> <span class="dim">recalculates monthly rent aggregate</span>
+4. <span class="node">syncCoachDeductionForSession()</span> <span class="arrow">→</span> <span class="dim">markNoTrainingForBranch() → staff_attendance rows</span>
+5. <span class="node">syncSalaryFinanceEntry()</span>  <span class="arrow">→</span> <span class="dim">recomputes net salary per staff in finance_tx</span>
+6. <span class="node">extendBranchPlayersByOneSession()</span> <span class="arrow">→</span> <span class="dim">+1 session (or +N days) per player</span>
+      </div>
+      <div class="callout callout-err" style="margin-top:14px">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-text"><strong>لا توجد معاملة (Transaction) تلفّ هذه العمليات الست.</strong> إذا فشلت أي خطوة في المنتصف، يبقى النظام في حالة غير متسقة دون أي تراجع أو إشعار للمستخدم.</div>
+      </div>
+    </div>
+
+    <!-- Other flows -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">💰 المدفوعات ← المالية</div>
+        <div class="card-body">
+          إنشاء دفعة في صفحة اللاعبين يستدعي <code>upsertAutoFinanceTx()</code> بـ <code>auto_key = "revenue:YYYY-MM:branchId"</code>. صفحة المالية تقرأ هذا الإدخال. مدفوعات <code>kind: "legacy"</code> مستثناة من التحليلات.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🧑‍💼 حضور الطاقم ← المالية</div>
+        <div class="card-body">
+          صفحة حضور الطاقم تحسب الخصومات عبر <code>computeSessionDeduction()</code>، ثم <code>syncSalaryFinanceEntry()</code> في sessions.ts تسحب سجلات الحضور الحية لإعادة حساب صافي الراتب في finance_tx.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 الرؤى ← لوحة التحكم</div>
+        <div class="card-body">
+          <code>computeInsights()</code> دالة نقية تأخذ بيانات اللاعبين، المدفوعات، الحضور، الفروع، والمالية. لوحة التحكم تمرر <code>attendance=[]</code> مما يُصمّت رؤية الغيابات المتتالية دائمًا.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📅 التقويم ← الجلسات</div>
+        <div class="card-body">
+          <code>calendar_events</code> هي الطبقة المرئية للمستخدم، بينما <code>sessions</code> هي مصدر الحقيقة لمزامنة المالية. الجدولان يمكن أن يتباعدا: حذف صف في sessions لا يحذف حدث التقويم المقابل.
+        </div>
+      </div>
+    </div>
+
+    <!-- Caching layer -->
+    <div class="card">
+      <div class="card-title">⚡ طبقة التخزين المؤقت (Module-Level Cache)</div>
+      <div class="card-body">
+        <p>النظام يستخدم ثلاثة تخزينات مؤقتة على مستوى الوحدة (process-level)، تُمسح عند تسجيل الخروج:</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>المتغير</th><th>المحتوى</th><th>يُمسح عند</th></tr></thead>
+          <tbody>
+            <tr><td><code>_academyIdCache</code></td><td>Promise&lt;string&gt; لـ academy_id</td><td>تسجيل الخروج</td></tr>
+            <tr><td><code>_membershipCache</code></td><td>Promise&lt;MembershipInfo&gt; (الدور، الصلاحيات)</td><td>تسجيل الخروج</td></tr>
+            <tr><td><code>_sidebarCache</code></td><td>SidebarData (اسم الأكاديمية، المستخدم، الشعار)</td><td>تسجيل الخروج + clearSidebarCache()</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SECTION 2 — KEY WEAKNESSES
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="section-num">02</div>
+      <div>
+        <div class="section-title">نقاط الضعف الرئيسية</div>
+        <div class="section-desc">إشكاليات تقنية جوهرية تؤثر على سلامة النظام واستقراره</div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W1</div>
+      <div class="num-content">
+        <div class="num-title">لا توجد معاملة (Transaction) حول سلسلة إلغاء التدريب <span class="tag tag-red">حرج</span></div>
+        <div class="num-body">
+          الـ 6 عمليات المترتبة على إلغاء جلسة تدريبية (تحديث الجلسة، المالية، تعويض اللاعبين، خصومات الطاقم) لا تُغلَّف بأي معاملة ذرية. إذا فشلت الخطوة الرابعة بعد نجاح الثلاث الأولى، ينتهي النظام في حالة متناقضة: تكلفة الملعب محذوفة، لكن رواتب الطاقم وجلسات اللاعبين لم تُحدَّث. لا توجد آلية تراجع أو إعادة محاولة.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W2</div>
+      <div class="num-content">
+        <div class="num-title">تحديث اللاعبين يعمل بحلقة O(n) بدل استعلام واحد <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          <code>extendBranchPlayersByOneSession()</code> تجلب كل لاعبي الفرع ثم تنفّذ <code>updatePlayer(id, ...)</code> لكل واحد منهم عبر <code>Promise.all</code>. لفرع يضم 80 لاعبًا، هذا 80 استعلام UPDATE متوازٍ. كان يجب أن يكون استعلامًا واحدًا: <code>UPDATE players SET sessions = sessions + 1 WHERE branch_id = $1</code>. والأشد خطورة: الدالة تُعوّض اللاعبين الموقوفين والمنتهية اشتراكاتهم بنفس القدر.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W3</div>
+      <div class="num-content">
+        <div class="num-title">عمود <code>finance_tx.branch_id</code> من نوع TEXT لا UUID مع Foreign Key <span class="tag tag-red">حرج</span></div>
+        <div class="num-body">
+          لا يوجد قيد FK بين finance_tx وجدول branches. عند حذف فرع، تبقى جميع سجلاته المالية التاريخية يتيمة — لا يمكن إعادة ربطها باسم الفرع. الواجهة قد تعرض UUID خامًا أو حقلًا فارغًا، والسجل التاريخي تالف بشكل دائم.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W4</div>
+      <div class="num-content">
+        <div class="num-title">لوحة التحكم تُمرّر <code>attendance=[]</code> لدالة الرؤى <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          <code>computeInsights()</code> في لوحة التحكم لا تحصل على بيانات الحضور، مما يجعل رؤية "الغيابات المتتالية" — الأكثر قيمة تشغيليًا — صامتة دائمًا على لوحة التحكم. صفحة الرؤى فقط تعرضها بشكل صحيح لأنها تجلب بياناتها بشكل مستقل.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W5</div>
+      <div class="num-content">
+        <div class="num-title">فجوة في إبطال كاش الشريط الجانبي بعد رفع الشعار <span class="tag tag-blue">منخفض</span></div>
+        <div class="num-body">
+          عند رفع شعار الأكاديمية، يُستدعى <code>clearSidebarCache()</code> لكن مكوّن Sidebar مثبّت حاليًا في الصفحة. مسح الكاش لا يُعيد تشغيل <code>useEffect</code>. الشعار يظهر فورًا في صفحة الإعدادات (local state) لكن يبقى الشريط الجانبي على الصورة القديمة حتى يتنقل المستخدم لصفحة أخرى.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W6</div>
+      <div class="num-content">
+        <div class="num-title">تداخل بين <code>calendar_events</code> و <code>sessions</code> في تمثيل نفس البيانات <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          التقويم المرئي يستخدم <code>calendar_events</code>، بينما مزامنة المالية تعتمد على <code>sessions</code>. جلسة ملغاة تنشئ صفًا في كلا الجدولين، ويمكن أن يتباعدا: حذف صف sessions لا يحذف حدث التقويم، وصفحة حضور اللاعبين تقرأ calendar_events لتوليد تواريخ إضافية متجاوزةً جدول sessions كليًا.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W7</div>
+      <div class="num-content">
+        <div class="num-title">لا يوجد حد أدنى لخصم الجلسات — الجلسات قد تصير سالبة <span class="tag tag-red">حرج</span></div>
+        <div class="num-body">
+          <code>reduceBranchPlayersByOneSession()</code> تطرح جلسة واحدة من كل لاعب في الفرع عند استعادة جلسة ملغاة، دون أي تحقق من أن <code>sessions >= 1</code>. لاعب لديه صفر جلسات سيُحوَّل إلى -1. لا يوجد CHECK constraint على مستوى قاعدة البيانات.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W8</div>
+      <div class="num-content">
+        <div class="num-title">لوحة تشخيص المطوّرين موجودة في كود الإنتاج <span class="tag tag-blue">منخفض</span></div>
+        <div class="num-body">
+          صفحة الفروع تحتوي على <code>showDiagnostics</code> state toggle يعرض مخرجات تقنية خام (UUIDs، نتائج RLS، كائنات Supabase الخام). أي مستخدم حقيقي يضغطها سيواجه ناتجًا محيّرًا. يجب إزالتها أو حصرها بـ development environment فقط.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W9</div>
+      <div class="num-content">
+        <div class="num-title">معالجة NULL في <code>subscription_end</code> غير دقيقة للسجلات التاريخية <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          للمدفوعات قبل migration 16 (التي أضافت عمود subscription_end)، يحسب النظام تاريخ الانتهاء بالرجوع إلى <code>player.end_date</code>، الذي يُكتب فوق قيمته عند كل تجديد. لاعب جدّد اشتراكه 3 مرات قبل migration 16 لا يمكن للنظام إعادة بناء الفترات التاريخية الدقيقة لأول وثاني تجديد. حالات الحضور للاعبين القدامى تبقى تقريبية لا دقيقة.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge">W10</div>
+      <div class="num-content">
+        <div class="num-title"><code>countSessionsInMonth</code> تُعاد حسابها لكل عضو طاقم في كل render <span class="tag tag-blue">منخفض</span></div>
+        <div class="num-body">
+          الدالة تتكرر على كل أيام الشهر للتحقق من أيام الفرع في كل مرة تُستدعى. في صفحة حضور الطاقم، تُستدعى داخل منطق عرض كل خلية. لفرع فيه 20 موظفًا وشهر مدته 30 يومًا، تنفّذ مئات المرات بنفس المدخلات دون أي memoization.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SECTION 3 — UX ISSUES
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="section-num">03</div>
+      <div>
+        <div class="section-title">مشكلات تجربة المستخدم</div>
+        <div class="section-desc">نقاط احتكاك تؤثر على صاحب الأكاديمية والمدير في الاستخدام اليومي</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card card-accent-amber">
+        <div class="card-title">UX1 — لا يوجد P&L لكل فرع <span class="tag tag-red">عالي الأثر</span></div>
+        <div class="card-body">صفحة المالية تُجمّع المعاملات حسب التصنيف لا حسب الفرع. مالك أكاديمية بـ 4 فروع لا يستطيع معرفة أي فرع مربح دون جمع يدوي. هذا أكثر سؤال شائع لمالك متعدد الفروع.</div>
+      </div>
+      <div class="card card-accent-amber">
+        <div class="card-title">UX2 — إلغاء التدريب بدون معاينة العواقب <span class="tag tag-red">عالي الأثر</span></div>
+        <div class="card-body">عند النقر على "إلغاء التدريب"، لا يُخبر النظام المستخدم بما سيحدث: "سيُعوَّض 47 لاعبًا بجلسة إضافية، وسيُخصم من راتب 6 مدربين." القرار مصيري لكنه يُتخذ بدون معاينة تأثيره.</div>
+      </div>
+      <div class="card card-accent-amber">
+        <div class="card-title">UX3 — الرؤى للقراءة فقط — لا مسار للتصرف <span class="tag tag-amber">متوسط</span></div>
+        <div class="card-body">صفحة الرؤى تعرض "7 لاعبين تنتهي اشتراكاتهم خلال 3 أيام" لكن لا يوجد زر لتجديدهم أو الاتصال بهم. حقل <code>actions[]</code> موجود في نوع البيانات لكنه يُعرض كنص فقط لا كإجراءات قابلة للنقر.</div>
+      </div>
+      <div class="card card-accent-amber">
+        <div class="card-title">UX4 — البحث عن اللاعبين غير محسوب عند التوسع <span class="tag tag-amber">متوسط</span></div>
+        <div class="card-body"><code>listPlayers()</code> تجلب كل اللاعبين عند كل تحميل للصفحة. الفلترة تتم بالكامل في React state عبر <code>.filter()</code>. لأكاديمية بـ 400+ لاعب، التحميل الأولي بطيء ولا يوجد pagination أو debounce على حقل البحث.</div>
+      </div>
+      <div class="card card-accent-amber">
+        <div class="card-title">UX5 — لا يوجد سجل مدفوعات للاعب في صفحة اللاعبين <span class="tag tag-amber">متوسط</span></div>
+        <div class="card-body">من صفحة اللاعبين يمكن رؤية تاريخ انتهاء الاشتراك الحالي فقط. لمعرفة تاريخ المدفوعات أو انتظام الدفع، يجب الانتقال يدويًا لصفحة المالية والبحث هناك. الدالة <code>listPlayerPayments()</code> موجودة في الكود لكن لا واجهة لها في صفحة اللاعبين.</div>
+      </div>
+      <div class="card card-accent-amber">
+        <div class="card-title">UX6 — صفحة الطاقم تُظهر الراتب الإجمالي فقط <span class="tag tag-amber">متوسط</span></div>
+        <div class="card-body">لا يوجد عرض للخصومات أو صافي الراتب أو ملخص الحضور في صفحة الطاقم. الراتب الفعلي بعد الغيابات موجود فقط في finance_tx، ولا يمكن رؤيته إلا بالذهاب لصفحة المالية والبحث يدويًا.</div>
+      </div>
+      <div class="card card-accent-blue">
+        <div class="card-title">UX7 — لوحة التحكم "هذا الشهر" ثابتة <span class="tag tag-blue">منخفض</span></div>
+        <div class="card-body">KPIs لوحة التحكم محسوبة دائمًا للشهر الحالي. لا يوجد سهم "الشهر السابق" أو محدد نطاق زمني. لمراجعة أداء الشهر الماضي، يجب الذهاب للإحصائيات أو المالية.</div>
+      </div>
+      <div class="card card-accent-blue">
+        <div class="card-title">UX8 — لا يمكن حذف شعار الأكاديمية <span class="tag tag-blue">منخفض</span></div>
+        <div class="card-body">بعد رفع الشعار، لا يوجد زر "إزالة الشعار" للعودة إلى الحرف الأول. زر "رفع شعار" سيستبدله، لكن الواجهة لا توضح ذلك، ولا توجد طريقة لإزالته نهائيًا.</div>
+      </div>
+      <div class="card card-accent-blue">
+        <div class="card-title">UX9 — دور مدير الفرع مُطبَّق جزئيًا <span class="tag tag-amber">متوسط</span></div>
+        <div class="card-body">دور <code>branch_manager</code> موجود في قاعدة البيانات مع عمود <code>has_finance_access</code> في academy_members، لكن لا توجد واجهة في الإعدادات لتعديل هذا الإعداد. المالك لا يستطيع منح/سحب صلاحية المالية لمدير فرع من داخل التطبيق.</div>
+      </div>
+      <div class="card card-accent-blue">
+        <div class="card-title">UX10 — التقويم لا يُظهر نسبة حضور كل تدريب <span class="tag tag-blue">منخفض</span></div>
+        <div class="card-body">شبكة التقويم تُظهر نقاطًا ملوّنة لأنواع الأحداث، لكن لا مؤشر على "24 من أصل 30 لاعبًا حضروا." كل أيام التدريب تبدو متطابقة بصريًا بغض النظر عن جودة الحضور.</div>
+      </div>
+      <div class="card card-accent-blue">
+        <div class="card-title">UX11 — الحالات الفارغة غائبة في معظم الصفحات <span class="tag tag-blue">منخفض</span></div>
+        <div class="card-body">صفحة الإحصائيات بدون بيانات تُظهر مخططات فارغة. صفحة المالية بدون معاملات تُظهر جدولًا فارغًا. لا توجد رسائل توجيهية ولا دعوة للإجراء مثل "أضف أول فرع للبدء."</div>
+      </div>
+      <div class="card card-accent-blue">
+        <div class="card-title">UX12 — لا عمليات مجمّعة على اللاعبين <span class="tag tag-blue">منخفض</span></div>
+        <div class="card-body">لا يمكن تجديد، إيقاف، أو نقل عدة لاعبين دفعة واحدة. كل عملية تتطلب فتح modal لكل لاعب على حدة. لأكاديمية تجدد بداية كل شهر، هذا احتكاك يومي ملموس.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SECTION 4 — DATA / LOGIC RISKS
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="section-num">04</div>
+      <div>
+        <div class="section-title">مخاطر البيانات والمنطق</div>
+        <div class="section-desc">تناقضات وأخطاء منطقية قد تؤدي إلى بيانات غير صحيحة أو تالفة</div>
+      </div>
+    </div>
+
+    <div class="callout callout-err">
+      <span class="callout-icon">🔴</span>
+      <div class="callout-text"><strong>تحذير:</strong> بعض هذه المخاطر تؤدي إلى تلف صامت في البيانات — المستخدم لا يرى أي خطأ، لكن الأرقام تصبح غير صحيحة.</div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(248,113,113,0.12);border-color:rgba(248,113,113,0.3);color:#f87171">R1</div>
+      <div class="num-content">
+        <div class="num-title">تعويض الجلسات يشمل اللاعبين الموقوفين والمنتهية اشتراكاتهم <span class="tag tag-red">حرج</span></div>
+        <div class="num-body">
+          <code>extendBranchPlayersByOneSession(branchId, branchDays)</code> تجلب اللاعبين بـ <code>branch_id = branchId</code> فقط — بدون أي فلتر على <code>is_paused</code> أو حالة الاشتراك. لاعب منتهي اشتراكه منذ شهرين ولاعب موقوف يحصلان على جلسة إضافية لن يستخدمانها أبدًا. للاعبي الاشتراك الشهري، تُضاف أيام إضافية لتاريخ انتهاء قد يكون منتهيًا أصلًا، مما يُعيد تنشيطه بشكل زائف في شبكة الحضور.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(248,113,113,0.12);border-color:rgba(248,113,113,0.3);color:#f87171">R2</div>
+      <div class="num-content">
+        <div class="num-title"><code>daysPerSession = 30 / sessionsInMonth</code> ينتج Infinity عند غياب أيام التدريب <span class="tag tag-red">حرج</span></div>
+        <div class="num-body">
+          إذا أُنشئ فرع بدون تحديد أيام التدريب، فإن <code>countSessionsInMonth()</code> تُعيد 0، و<code>daysPerSession = 30 / 0 = Infinity</code>. تطبيق <code>addDays(end_date, Infinity)</code> على تاريخ ينتج <code>Invalid Date</code>، والذي يُكتب إلى <code>players.end_date</code> كقيمة تالفة. لا يوجد تحقق للحماية من هذا السيناريو.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(251,191,36,0.12);border-color:rgba(251,191,36,0.3);color:#fbbf24">R3</div>
+      <div class="num-content">
+        <div class="num-title">خصومات الراتب تقسم على <code>branchCount</code> الكلي بما فيها الفروع المحذوفة <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          في <code>syncSalaryFinanceEntry()</code>، نصيب الراتب يُحسب بـ <code>monthly_salary / branchCount</code> حيث <code>branchCount = staff.branch_ids.length</code>. إذا كان الموظف مسجلًا في 3 فروع وحُذف أحدها، قد يبقى UUID الفرع المحذوف في مصفوفة <code>branch_ids</code> (لا يوجد CASCADE على مستوى التطبيق)، مما يجعل الراتب يُقسَّم على 3 بدلًا من 2 — خصم منهجي غير صحيح.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(251,191,36,0.12);border-color:rgba(251,191,36,0.3);color:#fbbf24">R4</div>
+      <div class="num-content">
+        <div class="num-title"><code>listPaymentPeriods()</code> غير مستخدمة في لوحة التحكم والرؤى <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          صفحة الحضور تستخدم بشكل صحيح <code>listPaymentPeriods()</code> مع عمود <code>subscription_end</code> لتحديد الفترات النشطة. لوحة التحكم والرؤى لا تزال تستخدم مصفوفة المدفوعات الخام وتشتق حالة الاشتراك من <code>player.end_date</code>. النظامان لديهما فهم مختلف لحالة اشتراك اللاعب.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(251,191,36,0.12);border-color:rgba(251,191,36,0.3);color:#fbbf24">R5</div>
+      <div class="num-content">
+        <div class="num-title">إدخالات <code>no_training</code> من التقويم قد تُكتب فوق إدخالات يدوية <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          إلغاء تدريب من التقويم يُنشئ سجلات <code>no_training</code> في staff_attendance عبر <code>markNoTrainingForBranch()</code>. إذا فتح مدير لاحقًا صفحة حضور الطاقم وغيّر حالة يدويًا، يستخدم <code>upsertStaffAttendance()</code> الذي يُضاربها. علم <code>deduct_from_salary</code> قد يختلف بين الإدخالين، مؤثرًا على حسابات الراتب النهائية.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(251,191,36,0.12);border-color:rgba(251,191,36,0.3);color:#fbbf24">R6</div>
+      <div class="num-content">
+        <div class="num-title">تصنيف "new vs renew" للمدفوعات يمكن أن يتعارض بين نقطتي حساب <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          <code>createPayment()</code> في صفحة اللاعبين تُحدد <code>kind: "new"</code> أو <code>"renew"</code> بناءً على ما إذا كان <code>start_date</code> يتطابق مع اليوم الحالي. لكن <code>renewalStats</code> في لوحة التحكم تُعيد اشتقاق التصنيف من مصفوفة المدفوعات بالتحقق من وجود دفعات سابقة. بيانات مُهاجَرة بشكل خاطئ ستُصيب معدل التجديد المحسوب في لوحة التحكم.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(251,191,36,0.12);border-color:rgba(251,191,36,0.3);color:#fbbf24">R7</div>
+      <div class="num-content">
+        <div class="num-title"><code>syncSalaryFinanceEntry</code> يعتمد على قراءة سجلات الحضور في الوقت الفعلي <span class="tag tag-amber">متوسط</span></div>
+        <div class="num-body">
+          في كل مرة تُستدعى هذه الدالة، تجلب كل سجلات حضور الطاقم للشهر وتعيد حساب صافي الراتب من الصفر. لا يوجد snapshot للحسابات. إذا حُذف سجل حضور تاريخيًا، تتغير قيمة finance_tx المقابلة عند أي استدعاء تالٍ للدالة، حتى لأشهر مضت وأُغلق حسابها.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SECTION 5 — PERFORMANCE RISKS
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="section-num">05</div>
+      <div>
+        <div class="section-title">مخاطر الأداء والقابلية للتوسع</div>
+        <div class="section-desc">مناطق ستتباطأ أو تنهار مع نمو حجم البيانات</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>المشكلة</th>
+            <th>المكان</th>
+            <th>الحجم الحرج</th>
+            <th>الخطورة</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>P1</td>
+            <td>لوحة التحكم تجلب كل اللاعبين وكل المدفوعات (كل التاريخ) عند كل تحميل</td>
+            <td><code>dashboard/page.tsx</code></td>
+            <td>500+ لاعب</td>
+            <td><span class="tag tag-red">عالي</span></td>
+          </tr>
+          <tr>
+            <td>P2</td>
+            <td>صفحة الإحصائيات تجلب كل سجلات الحضور لـ 12 شهرًا دفعة واحدة من الجانب العميل</td>
+            <td><code>statistics/page.tsx</code></td>
+            <td>96,000+ سجل</td>
+            <td><span class="tag tag-red">عالي</span></td>
+          </tr>
+          <tr>
+            <td>P3</td>
+            <td>تعويض اللاعبين: N استعلام UPDATE متوازٍ بدل استعلام واحد</td>
+            <td><code>players.ts</code></td>
+            <td>100+ لاعب</td>
+            <td><span class="tag tag-amber">متوسط</span></td>
+          </tr>
+          <tr>
+            <td>P4</td>
+            <td>صفحة التقويم هي الأثقل في التطبيق — تجلب فروع، طاقم، جلسات، أحداث، مدفوعات، لاعبين دفعة واحدة</td>
+            <td><code>calendar/page.tsx</code></td>
+            <td>بيانات متوسطة</td>
+            <td><span class="tag tag-amber">متوسط</span></td>
+          </tr>
+          <tr>
+            <td>P5</td>
+            <td>صفحة الرؤى تُكرّر كل عمليات جلب البيانات بشكل مستقل عن لوحة التحكم — لا كاش مشترك</td>
+            <td><code>insights/page.tsx</code></td>
+            <td>أي حجم</td>
+            <td><span class="tag tag-amber">متوسط</span></td>
+          </tr>
+          <tr>
+            <td>P6</td>
+            <td>صفحة المالية بنطاق 12 شهرًا قد ترجع آلاف السجلات مع تجميع عميل كامل</td>
+            <td><code>finance/page.tsx</code></td>
+            <td>500+ سجل</td>
+            <td><span class="tag tag-amber">متوسط</span></td>
+          </tr>
+          <tr>
+            <td>P7</td>
+            <td>جلب كل فترات الدفع لكل اللاعبين في صفحة الحضور بدون فلتر تاريخ</td>
+            <td><code>listPaymentPeriods()</code></td>
+            <td>300+ لاعب</td>
+            <td><span class="tag tag-amber">متوسط</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-warn" style="margin-top:8px">
+      <span class="callout-icon">📌</span>
+      <div class="callout-text"><strong>الجذر المشترك لمشاكل الأداء:</strong> جميع الصفحات الرئيسية هي Client Components تُطلق جلب البيانات بعد الـ mount (blank → loading → data). لا توجد Server Components أو Suspense boundaries. التحول لـ React Server Components سيحل معظم هذه المشاكل دفعة واحدة.</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SECTION 6 — HIGH-IMPACT IMPROVEMENTS
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="section-num">06</div>
+      <div>
+        <div class="section-title">التحسينات عالية الأثر</div>
+        <div class="section-desc">مُرتّبة حسب الأثر على قيمة المنتج مقابل جهد التنفيذ</div>
+      </div>
+    </div>
+
+    <!-- P1 -->
+    <div class="card card-accent-red" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:16px">
+        <span class="tag tag-red" style="font-size:12px">أولوية 1</span>
+        إصلاح مخاطر سلامة البيانات — قبل كل شيء
+      </div>
+      <div class="card-body">
+        <ul class="dot-list">
+          <li><strong>حد أدنى لخصم الجلسات:</strong> <code>Math.max(0, sessions - 1)</code> في <code>reduceBranchPlayersByOneSession()</code> يمنع الجلسات السالبة.</li>
+          <li><strong>فلترة اللاعبين في التعويض:</strong> استثناء <code>is_paused = true</code> واللاعبين المنتهية اشتراكاتهم من سلسلة التعويض.</li>
+          <li><strong>استعلام bulk UPDATE بدل الحلقة:</strong> <code>UPDATE players SET sessions = sessions + 1 WHERE branch_id = $1 AND is_paused = false AND subscription_mode = 'حصص'</code>.</li>
+          <li><strong>تفعيل رؤية الغيابات في لوحة التحكم:</strong> جلب آخر 30 يومًا من الحضور فقط وتمريرها لـ <code>computeInsights()</code>.</li>
+          <li><strong>تحويل <code>branch_id</code> في finance_tx لـ UUID FK:</strong> أو على الأقل إضافة عمود <code>branch_name_snapshot TEXT</code> للحفظ التاريخي.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- P2 -->
+    <div class="card card-accent-amber" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:16px">
+        <span class="tag tag-amber" style="font-size:12px">أولوية 2</span>
+        عرض P&L لكل فرع — أعلى قيمة تجارية
+      </div>
+      <div class="card-body">
+        <p>إضافة عرض "لكل فرع" في صفحة المالية: الإيرادات، تكاليف الملعب، رواتب المدربين، وصافي الربح لكل فرع. البيانات موجودة كاملًا في <code>finance_tx</code> مفلترة بـ <code>branch_id</code>. لا تحتاج هذه الميزة جلب بيانات إضافية — فقط تحويل في طريقة عرض ما هو موجود. <strong>هذا السؤال يُطرح يوميًا من كل مالك أكاديمية متعددة الفروع.</strong></p>
+      </div>
+    </div>
+
+    <!-- P3 -->
+    <div class="card card-accent-green" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:16px">
+        <span class="tag tag-green" style="font-size:12px">أولوية 3</span>
+        مسار تصرف من صفحة الرؤى
+      </div>
+      <div class="card-body">
+        <p>الرؤى تكشف "7 لاعبين تنتهي اشتراكاتهم." إضافة زر "تجديد الآن" يفتح modal الدفع مع تعبئة مسبقة للاعب، وزر رابط WhatsApp مباشر (<code>wa.me/{phone}?text=...</code>) لرسالة تذكير. هذا يحوّل الرؤية من قراءة إلى سير عمل. دالة <code>actions[]</code> موجودة في النوع — تحتاج فقط إلى واجهة.</p>
+      </div>
+    </div>
+
+    <!-- P4 -->
+    <div class="card card-accent-blue" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:16px">
+        <span class="tag tag-blue" style="font-size:12px">أولوية 4</span>
+        سجل المدفوعات لكل لاعب
+      </div>
+      <div class="card-body">
+        <p>عرض توسيعي أو لوحة جانبية في صفحة اللاعبين تُظهر التاريخ الكامل للمدفوعات (التاريخ، المبلغ، فترة الاشتراك). دالة <code>listPlayerPayments(playerId)</code> موجودة في <code>payments.ts</code> — تحتاج فقط إلى واجهة. يُلغي الحاجة للانتقال لصفحة المالية لمتابعة انتظام دفع اللاعب.</p>
+      </div>
+    </div>
+
+    <!-- P5 -->
+    <div class="card card-accent-purple" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:16px">
+        <span class="tag tag-purple" style="font-size:12px">أولوية 5</span>
+        تقرير رواتب شهري للطاقم
+      </div>
+      <div class="card-body">
+        <p>عرض مخصص يُظهر لكل موظف: الراتب الإجمالي، خصومات الغياب (كم جلسة)، وصافي الراتب. البيانات موجودة في <code>finance_tx</code> و<code>staff_attendance</code>. حاليًا هذه المعلومات موزعة على صفحتين مختلفتين بدون عرض مُجمَّع.</p>
+      </div>
+    </div>
+
+    <!-- P6 -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="font-size:16px">
+        <span class="tag tag-amber" style="font-size:12px">أولوية 6</span>
+        Server Components للصفحات الثقيلة
+      </div>
+      <div class="card-body">
+        <p>تحويل لوحة التحكم وصفحة المالية إلى React Server Components (أو استخدام <code>use server</code> مع Suspense) يُزيل: البياض الأولي عند التحميل، ازدواجية الطلبات، وتحميل بيانات كاملة على الجانب العميل. يُقلص وقت الاستجابة للمستخدم النهائي بشكل ملحوظ.</p>
+      </div>
+    </div>
+
+    <!-- P7 -->
+    <div class="card">
+      <div class="card-title" style="font-size:16px">
+        <span class="tag tag-blue" style="font-size:12px">أولوية 7</span>
+        تخزين الإشعارات في قاعدة البيانات
+      </div>
+      <div class="card-body">
+        <p>إضافة جدول <code>notifications</code> لحفظ الرؤيا الحرجة/التحذيرية عند توليدها. يُتيح: عدد الإشعارات غير المقروءة في الشريط الجانبي، مراجعة سجل التنبيهات التاريخية، وتدفق استلام/رفض. منطق الرؤية موجود بالكامل في <code>insights.ts</code> كدالة نقية — جاهز لهذا التحول.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SECTION 7 — STRATEGIC RECOMMENDATIONS
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="section-num">07</div>
+      <div>
+        <div class="section-title">التوصيات الاستراتيجية</div>
+        <div class="section-desc">كيف تتحول AcademyBase من نظام يعمل إلى منتج SaaS متميّز وذكي</div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(0,255,156,0.1);border-color:rgba(0,255,156,0.25)">S1</div>
+      <div class="num-content">
+        <div class="num-title">اعتماد مبدأ "مصدر الحقيقة الواحد" لحالة الاشتراك</div>
+        <div class="num-body">
+          النظام حاليًا يمتلك <strong>ثلاثة تمثيلات مستقلة</strong> لحالة اشتراك اللاعب: <code>players.end_date / sessions</code>، جدول <code>payments</code> عبر <code>subscription_end</code>، و<code>buildPeriodsMap()</code> في صفحة الحضور. هذه التمثيلات تتباعد صامتة. الإصلاح الاستراتيجي: جعل <code>payments</code> السجل المرجعي لكل فترات الاشتراك، وجعل <code>players.end_date</code> قيمة مُشتقة/مخزنة مؤقتًا تُحدَّث من المدفوعات فقط. هذا يضمن رؤية متطابقة لحالة الاشتراك عبر لوحة التحكم، المالية، والحضور.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(0,224,255,0.1);border-color:rgba(0,224,255,0.25);color:var(--accent-blue)">S2</div>
+      <div class="num-content">
+        <div class="num-title">تحويل سلسلة الآثار الجانبية إلى event queue</div>
+        <div class="num-body">
+          سلسلة إلغاء التدريب (6 عمليات، لا transaction) هي أكثر منطقة خطرة في النظام. الحل المعماري: عند إلغاء تدريب، كتابة <code>session_event</code> في قاعدة البيانات، ومعالجته عبر Supabase Edge Function ذريًا. هذا يفصل الواجهة عن مزامنة المالية، يجعل الفشل الجزئي قابلًا للتعافي، ويوفر سجل تدقيق كامل بما تغيّر ولماذا.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.25);color:var(--accent-purple)">S3</div>
+      <div class="num-content">
+        <div class="num-title">بناء طبقة تواصل مع اللاعبين</div>
+        <div class="num-body">
+          كل لاعب لديه رقم هاتف مُخزَّن. كل حدث في الأكاديمية (إلغاء تدريب، انتهاء اشتراك، تأخير دفع) يكتشفه النظام بالفعل. إضافة تكامل مع WhatsApp Business API أو SMS يحوّل AcademyBase من أداة إدارة إلى منصة تواصل — وهو المميّز الحقيقي للأكاديميات الصغيرة والمتوسطة التي تعمل بالقرب من عملائها.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.25);color:var(--accent-amber)">S4</div>
+      <div class="num-content">
+        <div class="num-title">تجميع البيانات على جانب الخادم (Materialized Views)</div>
+        <div class="num-body">
+          صفحات الإحصائيات ولوحة التحكم تجلب بيانات خامة وتحسب كل شيء في JavaScript. مع النمو، هذا يكسر. الاستثمار الاستراتيجي هو Materialized Views في Postgres:
+          <code>mv_monthly_revenue(academy_id, month, branch_id, amount)</code>،
+          <code>mv_renewal_rate(academy_id, month, new_count, renew_count)</code>،
+          <code>mv_attendance_rate(academy_id, month, branch_id, rate)</code>
+          — تُحدَّث ليليًا. الصفحات تستعلم عن بيانات مُجمَّعة مسبقًا، مما يقلل الحمل بعامل 100x.
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(0,255,156,0.1);border-color:rgba(0,255,156,0.25)">S5</div>
+      <div class="num-content">
+        <div class="num-title">إضافة سعة الفرع وإدارة قوائم الانتظار</div>
+        <div class="num-body">
+          الفروع حاليًا ليس لها حقل <code>max_players</code>. أكاديمية تُدير فرعًا بنسبة 95% لا تعرف ذلك من النظام. إضافة تتبع السعة يُتيح: إدارة قوائم انتظار اللاعبين الراغبين في الانضمام، تحذيرات السعة في محرك الرؤى، وإشارات تحسين التسعير (الفروع المكتملة تستحق أسعارًا أعلى).
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(0,224,255,0.1);border-color:rgba(0,224,255,0.25);color:var(--accent-blue)">S6</div>
+      <div class="num-content">
+        <div class="num-title">مفهوم "الموسم" — إدارة دورات الأكاديمية</div>
+        <div class="num-body">
+          النظام دائم لا يعرف الموسمية. كثير من الأكاديميات الرياضية تعمل بمواسم (سبتمبر – يونيو). إضافة جدول <code>seasons</code> يُتيح: ملخصات مالية لكل موسم، مقارنة موسم بموسم في لوحة التحكم، وعمليات "بداية موسم" مجمّعة (إعادة تعيين الجلسات، التسجيل الجماعي للاعبين العائدين).
+        </div>
+      </div>
+    </div>
+
+    <div class="numbered-item">
+      <div class="num-badge" style="background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.25);color:var(--accent-purple)">S7</div>
+      <div class="num-content">
+        <div class="num-title">إكمال دور مدير الفرع</div>
+        <div class="num-body">
+          دور <code>branch_manager</code> مُطبَّق جزئيًا في قاعدة البيانات: له دور، صلاحية مالية اختيارية (<code>has_finance_access</code>)، وـRLS محدود بالفرع. لكن من منظور المنتج، سير عمل مدير الفرع الفعلي (متابعة لاعبيه، حضورهم، ماليتهم) يتطلب تنقلًا عبر صفحات متعددة بدون تخصيص للفرع. لوحة تحكم مخصصة لمدير الفرع تحدّ جميع KPIs بفرعه ستجعل هذا الدور ذا قيمة حقيقية وتُمكّن المالكين من التفويض بأمان.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       PRIORITY TABLE
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="section page-break">
+    <div class="section-header">
+      <div class="section-num">—</div>
+      <div>
+        <div class="section-title">جدول الأولويات الموحّد</div>
+        <div class="section-desc">أهم 10 بنود مُرتّبة حسب الأثر على المنتج مقابل جهد التنفيذ</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>المشكلة</th>
+            <th>الأثر</th>
+            <th>الجهد</th>
+            <th>الأولوية</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>جلسات اللاعبين قد تصير سالبة (R7 + W7)</td>
+            <td>تلف بيانات</td>
+            <td class="pri-low">منخفض</td>
+            <td><span class="tag tag-red">فوري</span></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>اللاعبون الموقوفون/المنتهون يحصلون على تعويض (R1 + W2)</td>
+            <td>بيانات خاطئة</td>
+            <td class="pri-low">منخفض</td>
+            <td><span class="tag tag-red">فوري</span></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>رؤية الغيابات غائبة في لوحة التحكم (W4)</td>
+            <td>ميزة صامتة</td>
+            <td class="pri-low">منخفض</td>
+            <td><span class="tag tag-red">فوري</span></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>عرض P&L لكل فرع (UX1)</td>
+            <td>ضرورة تجارية</td>
+            <td class="pri-med">متوسط</td>
+            <td><span class="tag tag-amber">هذا الأسبوع</span></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>finance_tx.branch_id نوع TEXT بلا FK (W3)</td>
+            <td>تلف تاريخي عند الحذف</td>
+            <td class="pri-med">متوسط</td>
+            <td><span class="tag tag-amber">هذا الأسبوع</span></td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>سلسلة إلغاء التدريب بلا atomicity (W1)</td>
+            <td>فشل جزئي صامت</td>
+            <td class="pri-high">عالٍ</td>
+            <td><span class="tag tag-amber">هذا الشهر</span></td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>سجل مدفوعات اللاعب في صفحة اللاعبين (UX5)</td>
+            <td>احتكاك يومي</td>
+            <td class="pri-med">متوسط</td>
+            <td><span class="tag tag-amber">هذا الشهر</span></td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>مسار تصرف من صفحة الرؤى (UX3)</td>
+            <td>رؤى بلا فعل</td>
+            <td class="pri-med">متوسط</td>
+            <td><span class="tag tag-amber">هذا الشهر</span></td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>لوحة التحكم تجلب كل المدفوعات التاريخية (P1)</td>
+            <td>أداء عند التوسع</td>
+            <td class="pri-med">متوسط</td>
+            <td><span class="tag tag-blue">الربع القادم</span></td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>تجميع البيانات على الخادم لصفحات الإحصائيات (P2 + S4)</td>
+            <td>قابلية التوسع</td>
+            <td class="pri-high">عالٍ</td>
+            <td><span class="tag tag-blue">الربع القادم</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout" style="margin-top:24px">
+      <span class="callout-icon">💡</span>
+      <div class="callout-text">
+        <strong>الخلاصة:</strong>
+        النظام مبني على أساس تقني متين وبنية RLS مدروسة لمنع التكرار. القضايا الثلاث الأولى في الجدول يمكن إصلاحها في ساعات قليلة وتمنع تلف بيانات فعلي. البنود 4–8 تمثل أعلى عائد على تجربة المستخدم. البنود 9–10 تضمن استمرارية الأداء مع النمو. الاستراتيجيات S1–S7 تضع الخارطة للقفزة من "نظام يعمل" إلى "منتج SaaS متميّز."
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="footer">
+    <span>تقرير سري — للاستخدام الداخلي فقط</span>
+    <span><span class="footer-brand">AcademyBase</span> · تقرير تدقيق شامل · مارس 2026</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,32 +1,68 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { clearAcademyIdCache } from "@/src/lib/supabase/academyId";
-import { type UserRole, roleLabel } from "@/lib/supabase/roles";
+import { resolveAcademyId } from "@/src/lib/supabase/academyId";
+import { type UserRole, roleLabel, getMembership } from "@/lib/supabase/roles";
+import { countUnreadNotifications } from "@/src/lib/supabase/notifications";
+import { clearLibCaches } from "@/src/lib/supabase/clearAllCaches";
+
+// ── Module-level display cache ─────────────────────────────────────────────────
+// Stores sidebar display data for the session so the component doesn't re-query
+// on every mount (e.g. HMR, StrictMode double-mount, or unusual navigation).
+// Cleared on sign-out together with the other caches.
+type SidebarData = {
+  academyName: string;
+  userName: string;
+  role: UserRole;
+  hasFinanceAccess: boolean;
+  logoUrl: string | null;
+};
+let _sidebarCache: SidebarData | null = null;
+
+/** Call this after updating academy logo so the sidebar re-fetches on next mount. */
+export function clearSidebarCache() {
+  _sidebarCache = null;
+}
 
 const NavItem = ({
   href,
   label,
+  icon,
   active = false,
+  badge,
   onClick,
 }: {
   href: string;
   label: string;
+  icon?: string;
   active?: boolean;
+  badge?: number;
   onClick?: () => void;
 }) => (
   <Link
     href={href}
     onClick={onClick}
     className={[
-      "block rounded-xl px-4 py-3 text-sm transition",
-      active ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white",
+      "flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium transition",
+      active
+        ? "bg-[#00ff9c]/10 text-[#00ff9c] border border-[#00ff9c]/20"
+        : "text-white/65 hover:bg-white/[0.05] hover:text-white border border-transparent",
     ].join(" ")}
   >
-    {label}
+    {icon && (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={icon} alt="" width={20} height={20} style={{ objectFit: "contain" }} className="shrink-0" />
+    )}
+    <span className="flex-1">{label}</span>
+    {badge != null && badge > 0 && (
+      <span className="shrink-0 h-5 min-w-[20px] rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none">
+        {badge > 9 ? "9+" : badge}
+      </span>
+    )}
   </Link>
 );
 
@@ -46,57 +82,125 @@ export default function Sidebar({
   const [userName,    setUserName]           = useState<string>("");
   const [userRole,    setUserRole]           = useState<UserRole>("admin_staff");
   const [hasFinanceAccess, setFinanceAccess] = useState(false);
+  const [logoUrl,     setLogoUrl]            = useState<string | null>(null);
+  const [notifCount,  setNotifCount]         = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     const run = async () => {
+      // Serve from module-level cache when available (avoids all DB calls on
+      // re-mounts: HMR, React StrictMode double-invoke, unusual navigation).
+      if (_sidebarCache) {
+        setAcademyName(_sidebarCache.academyName);
+        setUserName(_sidebarCache.userName);
+        setUserRole(_sidebarCache.role);
+        setFinanceAccess(_sidebarCache.hasFinanceAccess);
+        setLogoUrl(_sidebarCache.logoUrl);
+        return;
+      }
+
       // getSession reads from the cookie — no extra network round-trip.
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (!user || cancelled) return;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("academy_id, full_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // resolveAcademyId() is a shared Promise cache — if any other lib call
+      // has already fired the profiles query this session, this returns instantly.
+      let academyId: string;
+      try {
+        academyId = await resolveAcademyId();
+      } catch {
+        return; // no academy linked yet (invited user mid-setup)
+      }
+      if (cancelled) return;
 
-      if (!profile?.academy_id || cancelled) return;
-
-      if (profile.full_name) setUserName(profile.full_name);
-
-      const [academyRes, memberRes] = await Promise.all([
+      // Three queries in parallel (all unblocked now that we have academyId):
+      //   1. profiles — only for full_name (academy_id already resolved above)
+      //   2. academies — display name in the header
+      //   3. getMembership() — cached; shares result with every other page caller
+      const [profileRes, academyRes, membership] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("user_id", user.id)
+          .maybeSingle(),
         supabase
           .from("academies")
-          .select("name")
-          .eq("id", profile.academy_id)
+          .select("name, logo_url")
+          .eq("id", academyId)
           .single(),
-        supabase
-          .from("academy_members")
-          .select("role, has_finance_access")
-          .eq("user_id", user.id)
-          .eq("academy_id", profile.academy_id)
-          .maybeSingle(),
+        getMembership(),
       ]);
 
       if (cancelled) return;
 
-      if (academyRes.data?.name) setAcademyName(academyRes.data.name);
+      const data: SidebarData = {
+        academyName: academyRes.data?.name ?? "",
+        userName:    profileRes.data?.full_name ?? "",
+        role:        membership.role,
+        hasFinanceAccess: membership.hasFinanceAccess,
+        logoUrl:     academyRes.data?.logo_url ?? null,
+      };
+      _sidebarCache = data;
 
-      const role = (memberRes.data?.role as UserRole) ?? "admin_staff";
-      setUserRole(role);
+      setAcademyName(data.academyName);
+      setUserName(data.userName);
+      setUserRole(data.role);
+      setFinanceAccess(data.hasFinanceAccess);
+      setLogoUrl(data.logoUrl);
 
-      const financeAccess =
-        role === "owner" || role === "partner"
-          ? true
-          : (memberRes.data?.has_finance_access ?? false);
-      setFinanceAccess(financeAccess);
+      // Non-blocking: fetch unread notification count for badge
+      countUnreadNotifications().then(setNotifCount).catch(() => {});
     };
 
     run();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Realtime: update badge count when new notifications arrive ────────────
+  useEffect(() => {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    resolveAcademyId().then((academyId) => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`sidebar-notif:${academyId}`)
+        .on(
+          "postgres_changes",
+          {
+            event:  "INSERT",
+            schema: "public",
+            table:  "notifications",
+            filter: `academy_id=eq.${academyId}`,
+          },
+          () => {
+            setNotifCount((c) => c + 1);
+          }
+        )
+        .subscribe();
+    }).catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Listen for mark-as-read events from NotificationBell ─────────────────
+  // Uses browser CustomEvents so no additional DB queries are needed.
+  useEffect(() => {
+    const onDecrement = () => setNotifCount((c) => Math.max(0, c - 1));
+    const onClear     = () => setNotifCount(0);
+    window.addEventListener("notifications:decrement", onDecrement);
+    window.addEventListener("notifications:clear",     onClear);
+    return () => {
+      window.removeEventListener("notifications:decrement", onDecrement);
+      window.removeEventListener("notifications:clear",     onClear);
+    };
   }, []);
 
   const logoLetter = useMemo(() => {
@@ -139,9 +243,16 @@ export default function Sidebar({
         {/* ── Header row: Logo + Title + Close button (mobile) ─────────────── */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold shrink-0">
-              {logoLetter}
-            </div>
+            <Link href="/dashboard" className="shrink-0">
+              <Image
+                src="/logo-1.png"
+                alt="AcademyBase"
+                width={120}
+                height={32}
+                priority
+                className="h-8 w-auto"
+              />
+            </Link>
             <div className="min-w-0">
               <div className="text-sm font-semibold truncate">{title}</div>
               <div className="text-xs text-white/60">لوحة الإدارة</div>
@@ -163,37 +274,46 @@ export default function Sidebar({
 
         {/* Nav */}
         <nav className="mt-6 space-y-1">
-          <NavItem href="/dashboard"          label="لوحة التحكم"      active={active === "dashboard"}                                         onClick={onMobileClose} />
-          <NavItem href="/players"            label="اللاعبين"          active={active === "players" && !pathname.startsWith("/players/attendance")} onClick={onMobileClose} />
-          <NavItem href="/players/attendance" label="سجل الحضور"       active={pathname.startsWith("/players/attendance")}                     onClick={onMobileClose} />
-          <NavItem href="/calendar"           label="التقويم"           active={active === "calendar"}                                         onClick={onMobileClose} />
-          <NavItem href="/insights"           label="التنبيهات الذكية" active={active === "insights"}                                         onClick={onMobileClose} />
-          <NavItem href="/statistics"         label="الإحصائيات"        active={active === "statistics"}                                       onClick={onMobileClose} />
+          <NavItem href="/dashboard"          label="لوحة التحكم"      icon="/dashboard.png" active={active === "dashboard"}                                         onClick={onMobileClose} />
+          <NavItem href="/players"            label="اللاعبين"          icon="/players.png"   active={active === "players" && !pathname.startsWith("/players/attendance")} onClick={onMobileClose} />
+          <NavItem href="/players/attendance" label="سجل الحضور"  icon="/players-attendence.png" active={pathname.startsWith("/players/attendance")}  onClick={onMobileClose} />
+          <NavItem href="/calendar"           label="التقويم"    icon="/calender.png"           active={active === "calendar"}                      onClick={onMobileClose} />
+          <NavItem href="/insights"           label="التنبيهات"  icon="/notifications.png"      active={active === "insights"}  badge={notifCount}  onClick={onMobileClose} />
+          <NavItem href="/statistics"         label="الإحصائيات" icon="/state.png"              active={active === "statistics"}                    onClick={onMobileClose} />
           {canSeeFinance && (
-            <NavItem href="/finance"          label="الادارة المالية"  active={active === "finance"}                                          onClick={onMobileClose} />
+            <NavItem href="/finance"          label="الادارة المالية" icon="/finance.png"       active={active === "finance"}                       onClick={onMobileClose} />
           )}
-          <NavItem href="/branches"           label="الفروع"            active={active === "branches"}                                         onClick={onMobileClose} />
+          <NavItem href="/branches"           label="الفروع"     icon="/branches.png"           active={active === "branches"}                      onClick={onMobileClose} />
           {canSeeStaff && (
-            <NavItem href="/staff"            label="الطاقم"            active={active === "staff"}                                            onClick={onMobileClose} />
+            <NavItem href="/staff"            label="الطاقم"     icon="/staff.png"              active={active === "staff"}                         onClick={onMobileClose} />
           )}
           {canSeeStaff && (
-            <NavItem href="/staff/attendance" label="حضور الطاقم"      active={active === "staff_attendance"}                                 onClick={onMobileClose} />
+            <NavItem href="/staff/attendance" label="حضور الطاقم" icon="/staff-attendence.png" active={active === "staff_attendance"}               onClick={onMobileClose} />
           )}
-          <NavItem href="/settings"           label="الإعدادات"         active={active === "settings"}                                         onClick={onMobileClose} />
+          <NavItem href="/settings"           label="الإعدادات"         icon="/settings.png"  active={active === "settings"}                                         onClick={onMobileClose} />
         </nav>
       </div>
 
       {/* Profile + Logout */}
       <div className="p-6 border-t border-white/10 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center text-xs font-semibold shrink-0">
-            {logoLetter}
-          </div>
+        <div className="flex items-center gap-3">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="شعار الأكاديمية"
+              className="h-10 w-10 rounded-full object-cover shrink-0 ring-1 ring-white/15"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold shrink-0">
+              {logoLetter}
+            </div>
+          )}
           <div className="min-w-0">
-            <div className="text-xs font-semibold text-white/90 truncate">
+            <div className="text-sm font-semibold text-white/90 truncate">
               {userName || "..."}
             </div>
-            <div className="text-xs text-white/55">
+            <div className="text-xs text-white/50">
               {roleLabel[userRole]}
             </div>
           </div>
@@ -202,7 +322,8 @@ export default function Sidebar({
         <button
           onClick={async () => {
             await supabase.auth.signOut();
-            clearAcademyIdCache();
+            clearLibCaches();
+            clearSidebarCache();
             router.push("/login");
             router.refresh();
           }}

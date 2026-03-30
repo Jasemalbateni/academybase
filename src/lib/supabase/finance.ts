@@ -37,15 +37,26 @@ export type FinanceTxUpdate = Partial<FinanceTxInsert>;
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
-export async function listFinanceTx(): Promise<DbFinanceTx[]> {
+/**
+ * List finance transactions.
+ * Pass `months` to fetch only specific YYYY-MM months (e.g. last 12 months).
+ * Omit for full history (used by dashboard charts that need multi-month data).
+ */
+export async function listFinanceTx(months?: string[]): Promise<DbFinanceTx[]> {
   const supabase = createClient();
   const academyId = await resolveAcademyId();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("finance_tx")
     .select("*")
     .eq("academy_id", academyId)
     .order("date", { ascending: false });
+
+  if (months && months.length > 0) {
+    query = query.in("month", months);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(`${error.message} [${error.code}]`);
   return (data ?? []) as DbFinanceTx[];

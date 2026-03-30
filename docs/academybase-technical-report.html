@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="ar" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AcademyBase — Technical Report 2026</title>
+  <style>
+    :root {
+      --bg-primary: #151617;
+      --bg-secondary: #161a30;
+      --bg-card: #1a1f35;
+      --bg-surface: #1e2440;
+      --accent-green: #00ff9c;
+      --accent-blue: #00e0ff;
+      --accent-purple: #a78bfa;
+      --accent-amber: #fbbf24;
+      --text-primary: #f4f4f9;
+      --text-secondary: #a0aec0;
+      --text-muted: #636e80;
+      --border: rgba(255,255,255,0.08);
+      --border-accent: rgba(0,255,156,0.25);
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    /* ─── Print / PDF ─── */
+    @media print {
+      body { background: #fff; color: #111; font-size: 12px; }
+      :root {
+        --bg-primary: #fff; --bg-secondary: #f8f8f8; --bg-card: #fff;
+        --bg-surface: #f0f0f0; --text-primary: #111; --text-secondary: #444;
+        --text-muted: #666; --border: #e0e0e0; --border-accent: #ccc;
+      }
+      .cover { page-break-after: always; }
+      section { page-break-inside: avoid; }
+      .toc { page-break-after: always; }
+      .no-print { display: none !important; }
+      .page-break { page-break-before: always; }
+      a { color: inherit; text-decoration: none; }
+    }
+
+    /* ─── Layout ─── */
+    .container { max-width: 960px; margin: 0 auto; padding: 0 32px; }
+
+    /* ─── Cover Page ─── */
+    .cover {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0d1117 0%, #161a30 50%, #0d1b2e 100%);
+      display: flex; flex-direction: column; justify-content: center;
+      position: relative; overflow: hidden;
+      padding: 80px 64px;
+    }
+    .cover::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(ellipse 80% 60% at 20% 30%, rgba(0,255,156,0.06) 0%, transparent 60%),
+                  radial-gradient(ellipse 60% 40% at 80% 70%, rgba(0,224,255,0.04) 0%, transparent 50%);
+    }
+    .cover-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 24px;
+      background: rgba(0,255,156,0.1); border: 1px solid rgba(0,255,156,0.3);
+      color: var(--accent-green); font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1.5px;
+      margin-bottom: 32px; width: fit-content;
+    }
+    .cover-badge span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); display: block; }
+    .cover h1 {
+      font-size: 64px; font-weight: 800; line-height: 1.1;
+      background: linear-gradient(135deg, #f4f4f9 0%, #a0aec0 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    .cover h1 span {
+      background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-blue) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .cover-subtitle {
+      font-size: 20px; color: var(--text-secondary); margin-bottom: 48px;
+      font-weight: 400; letter-spacing: 0.5px;
+    }
+    .cover-meta {
+      display: flex; gap: 32px; flex-wrap: wrap;
+    }
+    .cover-meta-item { display: flex; flex-direction: column; gap: 4px; }
+    .cover-meta-item .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+    .cover-meta-item .value { font-size: 15px; color: var(--text-primary); font-weight: 600; }
+    .cover-divider {
+      width: 80px; height: 3px;
+      background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+      border-radius: 2px; margin: 48px 0;
+    }
+    .cover-desc {
+      max-width: 560px; font-size: 16px; color: var(--text-secondary);
+      line-height: 1.8;
+    }
+    .cover-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 16px; margin-top: 56px;
+    }
+    .cover-pill {
+      padding: 10px 16px; border-radius: 10px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      font-size: 12px; color: var(--text-secondary); text-align: center;
+    }
+
+    /* ─── Navigation / TOC ─── */
+    .toc-wrapper {
+      background: var(--bg-secondary);
+      padding: 64px 0;
+    }
+    .toc-title {
+      font-size: 13px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 2px;
+      margin-bottom: 32px;
+    }
+    .toc-list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+    .toc-list li a {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; border-radius: 8px;
+      color: var(--text-secondary); text-decoration: none;
+      font-size: 13px; transition: background 0.15s;
+    }
+    .toc-list li a:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+    .toc-num {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: rgba(0,255,156,0.1); border: 1px solid rgba(0,255,156,0.2);
+      color: var(--accent-green); font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ─── Section ─── */
+    section {
+      padding: 72px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    section:last-child { border-bottom: none; }
+
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--accent-green);
+      margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-label::after {
+      content: ''; flex: 1; height: 1px;
+      background: linear-gradient(90deg, rgba(0,255,156,0.3), transparent);
+    }
+
+    h2 {
+      font-size: 36px; font-weight: 800; line-height: 1.2;
+      color: var(--text-primary); margin-bottom: 16px;
+    }
+    h2 .accent { color: var(--accent-green); }
+    .section-intro {
+      font-size: 16px; color: var(--text-secondary);
+      max-width: 680px; line-height: 1.8; margin-bottom: 48px;
+    }
+
+    h3 {
+      font-size: 18px; font-weight: 700; color: var(--text-primary);
+      margin-bottom: 12px; margin-top: 40px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h3::before {
+      content: ''; width: 4px; height: 20px; border-radius: 2px;
+      background: linear-gradient(180deg, var(--accent-green), var(--accent-blue));
+    }
+
+    h4 {
+      font-size: 14px; font-weight: 700; color: var(--accent-blue);
+      margin-bottom: 8px; margin-top: 28px; text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    p { color: var(--text-secondary); margin-bottom: 16px; line-height: 1.8; }
+    ul, ol { padding-left: 0; list-style: none; margin-bottom: 16px; }
+    li { color: var(--text-secondary); margin-bottom: 6px; padding-left: 20px; position: relative; }
+    li::before { content: '›'; position: absolute; left: 0; color: var(--accent-green); font-weight: 700; }
+
+    /* ─── Cards ─── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card-accent { border-top: 2px solid var(--accent-green); }
+    .card-blue { border-top: 2px solid var(--accent-blue); }
+    .card-amber { border-top: 2px solid var(--accent-amber); }
+    .card-purple { border-top: 2px solid var(--accent-purple); }
+    .card h4 { margin-top: 0; }
+
+    .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 32px; }
+    .card-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+
+    /* ─── KPI Tiles ─── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
+    .kpi-tile {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px;
+      text-align: center;
+    }
+    .kpi-value { font-size: 28px; font-weight: 800; color: var(--accent-green); }
+    .kpi-label { font-size: 11px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+
+    /* ─── Tables ─── */
+    .table-wrapper { overflow-x: auto; margin-bottom: 32px; border-radius: 12px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: var(--bg-surface); }
+    th {
+      padding: 12px 16px; text-align: left;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 16px;
+      font-size: 13px; color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .td-highlight { color: var(--accent-green); font-weight: 600; font-family: monospace; font-size: 12px; }
+    .td-blue { color: var(--accent-blue); font-family: monospace; font-size: 12px; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 12px;
+      font-size: 11px; font-weight: 600;
+    }
+    .badge-green { background: rgba(0,255,156,0.12); color: var(--accent-green); }
+    .badge-blue { background: rgba(0,224,255,0.12); color: var(--accent-blue); }
+    .badge-amber { background: rgba(251,191,36,0.12); color: var(--accent-amber); }
+    .badge-red { background: rgba(252,96,96,0.12); color: #fc6060; }
+    .badge-purple { background: rgba(167,139,250,0.12); color: var(--accent-purple); }
+
+    /* ─── Code blocks ─── */
+    code {
+      font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+      font-size: 12px;
+    }
+    .code-block {
+      background: #0d1117;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 20px 24px;
+      overflow-x: auto; margin-bottom: 24px;
+      position: relative;
+    }
+    .code-block pre { color: #a0aec0; line-height: 1.6; }
+    .code-block .kw { color: #ff79c6; }
+    .code-block .fn { color: #50fa7b; }
+    .code-block .str { color: #f1fa8c; }
+    .code-block .cmt { color: #636e80; font-style: italic; }
+    .code-block .tp { color: #8be9fd; }
+    .code-block .num { color: #bd93f9; }
+    .code-lang {
+      position: absolute; top: 10px; right: 14px;
+      font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    /* ─── Diagrams ─── */
+    .diagram {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 32px;
+      margin-bottom: 32px; text-align: center;
+    }
+    .arch-diagram {
+      display: flex; flex-direction: column; align-items: center; gap: 0;
+    }
+    .arch-layer {
+      display: flex; gap: 12px; justify-content: center;
+      flex-wrap: wrap;
+    }
+    .arch-box {
+      padding: 10px 20px; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      border: 1px solid;
+    }
+    .arch-box-green { background: rgba(0,255,156,0.08); border-color: rgba(0,255,156,0.3); color: var(--accent-green); }
+    .arch-box-blue { background: rgba(0,224,255,0.08); border-color: rgba(0,224,255,0.3); color: var(--accent-blue); }
+    .arch-box-purple { background: rgba(167,139,250,0.08); border-color: rgba(167,139,250,0.3); color: var(--accent-purple); }
+    .arch-box-amber { background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.3); color: var(--accent-amber); }
+    .arch-box-gray { background: rgba(255,255,255,0.04); border-color: var(--border); color: var(--text-secondary); }
+    .arch-arrow {
+      width: 2px; height: 32px;
+      background: linear-gradient(180deg, transparent, rgba(0,255,156,0.5), transparent);
+      margin: 0 auto;
+    }
+    .arch-label {
+      font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 1.5px; margin-bottom: 12px;
+    }
+
+    /* ─── Data flow ─── */
+    .flow-step {
+      display: flex; align-items: flex-start; gap: 16px;
+      padding: 16px; border-radius: 10px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .flow-num {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(0,255,156,0.15), rgba(0,224,255,0.15));
+      border: 1px solid rgba(0,255,156,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--accent-green);
+    }
+    .flow-content h4 { margin: 0 0 4px; font-size: 13px; color: var(--text-primary); text-transform: none; letter-spacing: 0; }
+    .flow-content p { margin: 0; font-size: 12px; }
+
+    /* ─── Warning / note boxes ─── */
+    .callout {
+      padding: 16px 20px; border-radius: 10px; margin-bottom: 20px;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .callout-warn { background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); }
+    .callout-info { background: rgba(0,224,255,0.06); border: 1px solid rgba(0,224,255,0.2); }
+    .callout-err { background: rgba(252,96,96,0.06); border: 1px solid rgba(252,96,96,0.2); }
+    .callout-ok { background: rgba(0,255,156,0.06); border: 1px solid rgba(0,255,156,0.2); }
+    .callout-icon { font-size: 16px; flex-shrink: 0; line-height: 1.5; }
+    .callout p { margin: 0; font-size: 13px; }
+    .callout-warn p { color: #fbbf24; }
+    .callout-info p { color: var(--accent-blue); }
+    .callout-err p { color: #fc6060; }
+    .callout-ok p { color: var(--accent-green); }
+
+    /* ─── Progress bars ─── */
+    .perf-row { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+    .perf-label { width: 200px; font-size: 13px; color: var(--text-secondary); flex-shrink: 0; }
+    .perf-bar { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .perf-fill { height: 100%; border-radius: 3px; }
+    .perf-fill-green { background: linear-gradient(90deg, var(--accent-green), #00c9a7); }
+    .perf-fill-blue { background: linear-gradient(90deg, var(--accent-blue), #0099cc); }
+    .perf-fill-amber { background: linear-gradient(90deg, var(--accent-amber), #d97706); }
+    .perf-fill-red { background: linear-gradient(90deg, #fc6060, #c0392b); }
+    .perf-score { width: 36px; text-align: right; font-size: 12px; font-weight: 700; color: var(--text-primary); }
+
+    /* ─── Footer ─── */
+    .footer {
+      background: var(--bg-secondary);
+      padding: 40px 0; text-align: center;
+      border-top: 1px solid var(--border);
+    }
+    .footer p { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+
+    /* ─── Inline code ─── */
+    .inline-code {
+      font-family: monospace; font-size: 12px;
+      background: rgba(255,255,255,0.06); color: var(--accent-blue);
+      padding: 2px 6px; border-radius: 4px;
+    }
+
+    /* ─── Separator ─── */
+    .sep {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+      margin: 40px 0;
+    }
+
+    /* ─── Module grid ─── */
+    .module-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .module-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+    }
+    .module-icon { font-size: 24px; margin-bottom: 12px; }
+    .module-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+    .module-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.7; }
+    .module-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .module-tag {
+      font-size: 10px; padding: 2px 8px; border-radius: 12px;
+      background: rgba(255,255,255,0.04); color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║             COVER PAGE                   ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<div class="cover">
+  <div class="container">
+    <div class="cover-badge"><span></span> Technical Report — Confidential</div>
+    <h1>Academy<span>Base</span></h1>
+    <div class="cover-subtitle">Full System Technical Overview &amp; Architecture Review</div>
+    <div class="cover-divider"></div>
+    <div class="cover-desc">
+      A comprehensive engineering analysis of the AcademyBase SaaS platform — covering architecture, database design, module structure, performance profile, identified weaknesses, and a prioritized improvement roadmap.
+    </div>
+    <div class="cover-meta" style="margin-top:40px">
+      <div class="cover-meta-item"><div class="label">Version</div><div class="value">1.0.0</div></div>
+      <div class="cover-meta-item"><div class="label">Date</div><div class="value">March 2026</div></div>
+      <div class="cover-meta-item"><div class="label">Stack</div><div class="value">Next.js 16 + Supabase</div></div>
+      <div class="cover-meta-item"><div class="label">Status</div><div class="value" style="color:var(--accent-green)">Production</div></div>
+    </div>
+    <div class="cover-grid">
+      <div class="cover-pill">Next.js 16.1 (App Router)</div>
+      <div class="cover-pill">React 19.2 + TypeScript 5</div>
+      <div class="cover-pill">Supabase 2.97 (PostgreSQL)</div>
+      <div class="cover-pill">Tailwind CSS 4</div>
+      <div class="cover-pill">Row-Level Security (RLS)</div>
+      <div class="cover-pill">Arabic RTL — Sports Management</div>
+    </div>
+  </div>
+</div>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║             TABLE OF CONTENTS            ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<div class="toc-wrapper">
+  <div class="container">
+    <div class="toc-title">Table of Contents</div>
+    <ul class="toc-list">
+      <li><a href="#section-1"><span class="toc-num">1</span>Executive Summary</a></li>
+      <li><a href="#section-2"><span class="toc-num">2</span>System Architecture</a></li>
+      <li><a href="#section-3"><span class="toc-num">3</span>Technology Stack</a></li>
+      <li><a href="#section-4"><span class="toc-num">4</span>Database Architecture</a></li>
+      <li><a href="#section-5"><span class="toc-num">5</span>Core Modules</a></li>
+      <li><a href="#section-6"><span class="toc-num">6</span>Financial System</a></li>
+      <li><a href="#section-7"><span class="toc-num">7</span>KPI &amp; Analytics</a></li>
+      <li><a href="#section-8"><span class="toc-num">8</span>Authentication &amp; Security</a></li>
+      <li><a href="#section-9"><span class="toc-num">9</span>Codebase Structure</a></li>
+      <li><a href="#section-10"><span class="toc-num">10</span>Performance Analysis</a></li>
+      <li><a href="#section-11"><span class="toc-num">11</span>Product Weaknesses</a></li>
+      <li><a href="#section-12"><span class="toc-num">12</span>Improvement Opportunities</a></li>
+      <li><a href="#section-13"><span class="toc-num">13</span>Future Roadmap</a></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         1. EXECUTIVE SUMMARY             ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-1">
+  <div class="container">
+    <div class="section-label">01 — Overview</div>
+    <h2>Executive <span class="accent">Summary</span></h2>
+    <div class="section-intro">
+      AcademyBase is a full-stack SaaS platform purpose-built for Arabic-speaking sports academies. It provides a complete operational system covering everything from player registration to financial reporting.
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-tile">
+        <div class="kpi-value">13</div>
+        <div class="kpi-label">Database Tables</div>
+      </div>
+      <div class="kpi-tile">
+        <div class="kpi-value">28</div>
+        <div class="kpi-label">React Pages</div>
+      </div>
+      <div class="kpi-tile">
+        <div class="kpi-value">33</div>
+        <div class="kpi-label">SQL Migrations</div>
+      </div>
+      <div class="kpi-tile">
+        <div class="kpi-value">~13.5k</div>
+        <div class="kpi-label">Lines of Code</div>
+      </div>
+    </div>
+
+    <h3>What is AcademyBase?</h3>
+    <p>
+      AcademyBase serves as the operating system for football academies. It replaces fragmented tools — spreadsheets, WhatsApp group notes, manual ledgers — with a unified, role-aware platform accessible from any device.
+    </p>
+    <p>
+      The platform is fully localized in Arabic with an RTL layout, targeting academy owners and managers in Gulf and Arab markets. It handles the complete operational lifecycle: onboarding new players, tracking attendance session-by-session, managing subscriptions across billing cycles, recording all financial flows, and surfacing actionable insights through dashboards and AI-driven analysis.
+    </p>
+
+    <h3>Core Value Proposition</h3>
+    <div class="card-grid">
+      <div class="card card-accent">
+        <h4>Operational Clarity</h4>
+        <p>Real-time view of all active players, their subscription status, upcoming renewals, and attendance streaks — eliminating guesswork from daily academy management.</p>
+      </div>
+      <div class="card card-blue">
+        <h4>Financial Transparency</h4>
+        <p>Auto-synchronized revenue from payments, configurable expense categories, staff salary tracking, and branch-level P&amp;L — all in one ledger with override controls.</p>
+      </div>
+      <div class="card card-purple">
+        <h4>Multi-Role Team Access</h4>
+        <p>Owner, partner, branch manager, and admin staff roles with distinct data access controls enforced at both UI and database levels via PostgreSQL RLS policies.</p>
+      </div>
+      <div class="card card-amber">
+        <h4>AI-Ready Insights</h4>
+        <p>A pure-computation insight engine surfaces critical signals: renewal rate drops, revenue anomalies, expiring subscriptions, and attendance red flags — prioritized by severity.</p>
+      </div>
+    </div>
+
+    <h3>Current Capabilities</h3>
+    <ul>
+      <li>Player CRUD with subscription mode support (session-based and monthly billing)</li>
+      <li>Multi-branch management with configurable schedules, pricing, and session calendars</li>
+      <li>Attendance tracking with session-period awareness and optimistic UI updates</li>
+      <li>Financial ledger with auto-sync from payments, staff salaries, and field costs</li>
+      <li>Role-based team collaboration with invitation-based onboarding</li>
+      <li>Insights engine with 5 signal types and severity classification</li>
+      <li>Analytics with trend charts, renewal rates, age distribution, and seasonality</li>
+      <li>Monthly training calendar with match, cancellation, and special event tracking</li>
+      <li>Responsive mobile-first RTL design with dark theme</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         2. SYSTEM ARCHITECTURE           ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-2" class="page-break">
+  <div class="container">
+    <div class="section-label">02 — Architecture</div>
+    <h2>System <span class="accent">Architecture</span></h2>
+    <div class="section-intro">
+      AcademyBase uses a modern serverless-first architecture with Next.js App Router and Supabase as the sole backend. There is no custom API server — all data access goes directly through Supabase's PostgREST API, secured by Row-Level Security policies.
+    </div>
+
+    <div class="diagram">
+      <div class="arch-label">Full System Architecture</div>
+      <div class="arch-diagram">
+        <!-- Client Layer -->
+        <div class="arch-layer">
+          <div class="arch-box arch-box-green">Browser (React 19)</div>
+          <div class="arch-box arch-box-green">Mobile Safari</div>
+          <div class="arch-box arch-box-green">iPad / Tablet</div>
+        </div>
+        <div class="arch-arrow"></div>
+        <!-- Edge Layer -->
+        <div class="arch-layer">
+          <div class="arch-box arch-box-blue">Vercel Edge Network</div>
+          <div class="arch-box arch-box-blue">Next.js Middleware (Auth Guard)</div>
+        </div>
+        <div class="arch-arrow"></div>
+        <!-- App Layer -->
+        <div class="arch-layer">
+          <div class="arch-box arch-box-purple">Next.js App Router (SSR + Client)</div>
+          <div class="arch-box arch-box-purple">Server Actions</div>
+          <div class="arch-box arch-box-purple">API Routes</div>
+        </div>
+        <div class="arch-arrow"></div>
+        <!-- Data Layer -->
+        <div class="arch-layer">
+          <div class="arch-box arch-box-amber">Supabase PostgREST</div>
+          <div class="arch-box arch-box-amber">Supabase Auth (JWT)</div>
+          <div class="arch-box arch-box-amber">Supabase Storage</div>
+        </div>
+        <div class="arch-arrow"></div>
+        <!-- DB Layer -->
+        <div class="arch-layer">
+          <div class="arch-box arch-box-gray">PostgreSQL (Row-Level Security)</div>
+          <div class="arch-box arch-box-gray">SECURITY DEFINER Functions</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Frontend Architecture</h3>
+    <p>
+      The frontend is a React 19 single-page application rendered within Next.js App Router. Protected pages are client components (<span class="inline-code">"use client"</span>) that fetch data on mount via <span class="inline-code">useEffect</span> + Supabase browser client. Public auth pages (login, register, invite accept) are server components leveraging Next.js SSR.
+    </p>
+    <p>
+      The layout hierarchy is: Root Layout → App Layout (sidebar + mobile header state) → Page. The App Layout is a client component that manages the sidebar drawer state for responsive behavior.
+    </p>
+
+    <h3>Backend Architecture</h3>
+    <p>
+      There is no custom API server. Supabase's auto-generated PostgREST API serves all data requests. Authentication uses Supabase Auth (JWT-based). Role and access control is enforced at the database layer via PostgreSQL Row-Level Security — the application layer simply reflects the data Supabase returns.
+    </p>
+    <p>
+      Server Actions (Next.js) are used for critical write operations that require the service-role key: accepting invitations (<span class="inline-code">acceptInvitationAction</span>), creating academies (<span class="inline-code">setupAcademyAction</span>), and invited user setup (<span class="inline-code">setupInvitedUserAction</span>).
+    </p>
+
+    <h3>Data Flow Pattern</h3>
+    <div class="flow-step">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <h4>Auth Check (Middleware)</h4>
+        <p>Every request through <span class="inline-code">middleware.ts</span> verifies a valid Supabase session. Unauthenticated users are redirected to <span class="inline-code">/login</span>. Server Actions bypass this redirect to prevent client-side errors.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <h4>Academy ID Resolution (Cached)</h4>
+        <p><span class="inline-code">resolveAcademyId()</span> reads <span class="inline-code">profiles.academy_id</span> for the current user. The result is cached as a module-level Promise — all concurrent callers share a single in-flight query. Only 1 database call per session.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <h4>Parallel Data Fetch</h4>
+        <p>Pages execute <span class="inline-code">Promise.all([...libFunctions])</span> where each lib function uses the cached academy_id. This achieves parallel DB queries with a single resolved identifier.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <h4>RLS Enforcement (Database)</h4>
+        <p>Supabase applies RLS policies on every query. SECURITY DEFINER helper functions resolve user context without recursive policy evaluation. Non-authorized users receive empty result sets, not errors.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">5</div>
+      <div class="flow-content">
+        <h4>State + Render</h4>
+        <p>Data lands in React state. <span class="inline-code">useMemo</span> computes derived metrics (renewal rate, KPIs). Charts render via Recharts (tree-shaken). Optimistic UI updates for attendance toggling.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         3. TECHNOLOGY STACK              ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-3">
+  <div class="container">
+    <div class="section-label">03 — Stack</div>
+    <h2>Technology <span class="accent">Stack</span></h2>
+    <div class="section-intro">
+      AcademyBase uses a deliberately minimal, modern stack chosen for developer velocity, deployment simplicity, and production-grade reliability.
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Technology</th>
+            <th>Version</th>
+            <th>Role</th>
+            <th>Why Chosen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Framework</td>
+            <td class="td-highlight">Next.js</td>
+            <td>16.1.6</td>
+            <td>Full-stack React</td>
+            <td>App Router, Server Actions, SSR, Vercel edge deployment</td>
+          </tr>
+          <tr>
+            <td>UI Library</td>
+            <td class="td-highlight">React</td>
+            <td>19.2.3</td>
+            <td>Component rendering</td>
+            <td>Latest concurrent features, stable for production</td>
+          </tr>
+          <tr>
+            <td>Language</td>
+            <td class="td-highlight">TypeScript</td>
+            <td>5.x</td>
+            <td>Type safety</td>
+            <td>Strict mode enforced, eliminates runtime type errors</td>
+          </tr>
+          <tr>
+            <td>Styling</td>
+            <td class="td-highlight">Tailwind CSS</td>
+            <td>4.x</td>
+            <td>Utility CSS</td>
+            <td>RTL-compatible, zero-config dark mode, fast iteration</td>
+          </tr>
+          <tr>
+            <td>Backend/DB</td>
+            <td class="td-highlight">Supabase</td>
+            <td>2.97.0</td>
+            <td>Database + Auth + API</td>
+            <td>PostgreSQL + PostgREST auto-API + JWT Auth + RLS in one service</td>
+          </tr>
+          <tr>
+            <td>Charts</td>
+            <td class="td-highlight">Recharts</td>
+            <td>3.7.0</td>
+            <td>Data visualization</td>
+            <td>Composable React-native charts; tree-shaken via next.config</td>
+          </tr>
+          <tr>
+            <td>Build</td>
+            <td class="td-highlight">Turbopack</td>
+            <td>Built-in</td>
+            <td>Dev bundler</td>
+            <td>10–15× faster dev server HMR vs. Webpack</td>
+          </tr>
+          <tr>
+            <td>Database</td>
+            <td class="td-highlight">PostgreSQL</td>
+            <td>15.x (Supabase)</td>
+            <td>Relational DB</td>
+            <td>ACID, RLS, JSONB, full SQL — hosted by Supabase</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Architectural Philosophy</h3>
+    <div class="card-grid">
+      <div class="card">
+        <h4>Zero Backend Servers</h4>
+        <p>No Express, no Django, no custom API. All data operations go through Supabase PostgREST. This eliminates an entire infrastructure tier and reduces operational overhead to near zero.</p>
+      </div>
+      <div class="card">
+        <h4>Zero State Management Library</h4>
+        <p>No Redux, no Zustand, no Jotai. Plain React hooks (<span class="inline-code">useState</span>, <span class="inline-code">useMemo</span>) with Supabase as the single source of truth. Eliminates boilerplate and synchronization bugs.</p>
+      </div>
+      <div class="card">
+        <h4>Zero localStorage</h4>
+        <p>All user data persists in Supabase only. Session-scoped data uses module-level memory (cleared on logout). This prevents stale data bugs across login sessions and is more secure.</p>
+      </div>
+      <div class="card">
+        <h4>Security at the Database</h4>
+        <p>Row-Level Security enforces authorization at the data layer. The frontend doesn't need to implement access control — RLS returns only the rows each user is permitted to see, regardless of how queries are made.</p>
+      </div>
+    </div>
+
+    <div class="callout callout-ok">
+      <div class="callout-icon">✓</div>
+      <p>This stack combination enables a single developer to build and operate a production SaaS. Supabase handles authentication, database hosting, backups, and the REST API. Next.js + Vercel handle global CDN, SSR, and serverless compute. The total infrastructure cost at moderate scale is under $50/month.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         4. DATABASE ARCHITECTURE         ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-4" class="page-break">
+  <div class="container">
+    <div class="section-label">04 — Database</div>
+    <h2>Database <span class="accent">Architecture</span></h2>
+    <div class="section-intro">
+      The database is a PostgreSQL instance managed by Supabase with 13 tables, 33 migration files (~3,900 SQL lines), and a carefully designed non-recursive Row-Level Security system.
+    </div>
+
+    <h3>Table Schema</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Table</th><th>Primary Key</th><th>Foreign Keys</th><th>Purpose</th><th>Row Count (est.)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-highlight">academies</td><td>uuid</td><td>owner_id → auth.users</td><td>Academy organization record</td><td>Low (1 per academy)</td></tr>
+          <tr><td class="td-highlight">profiles</td><td>user_id</td><td>academy_id → academies</td><td>CANONICAL: user → academy mapping</td><td>Low (1 per user)</td></tr>
+          <tr><td class="td-highlight">academy_members</td><td>uuid</td><td>academy_id, user_id</td><td>Role-based team membership</td><td>Low (team size)</td></tr>
+          <tr><td class="td-highlight">branches</td><td>uuid</td><td>academy_id</td><td>Training locations with pricing</td><td>Low (2–10)</td></tr>
+          <tr><td class="td-highlight">players</td><td>uuid</td><td>academy_id, branch_id</td><td>Subscriber records</td><td>Medium (50–1000)</td></tr>
+          <tr><td class="td-highlight">payments</td><td>uuid</td><td>academy_id, player_id, branch_id</td><td>Subscription payment history</td><td>High (grows monthly)</td></tr>
+          <tr><td class="td-highlight">staff</td><td>uuid</td><td>academy_id</td><td>Coach/admin records with salary</td><td>Low (5–50)</td></tr>
+          <tr><td class="td-highlight">finance_tx</td><td>uuid</td><td>academy_id</td><td>Income/expense ledger</td><td>High (auto-generated)</td></tr>
+          <tr><td class="td-highlight">attendance</td><td>uuid</td><td>academy_id, player_id, branch_id</td><td>Per-session attendance record</td><td>Very High (daily)</td></tr>
+          <tr><td class="td-highlight">calendar_events</td><td>uuid</td><td>academy_id, branch_id</td><td>Training/match/event calendar</td><td>Medium (monthly)</td></tr>
+          <tr><td class="td-highlight">invitations</td><td>uuid</td><td>academy_id, invited_by</td><td>Team invite tokens</td><td>Very Low</td></tr>
+          <tr><td class="td-highlight">sessions</td><td>uuid</td><td>branch_id</td><td>Per-session financial costs</td><td>Medium</td></tr>
+          <tr><td class="td-highlight">subscription_events</td><td>uuid</td><td>academy_id, player_id</td><td>Subscription lifecycle audit log</td><td>High</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Key Relationships</h3>
+    <div class="code-block">
+      <div class="code-lang">SQL</div>
+      <pre>
+<span class="cmt">-- Core entity graph</span>
+academies
+  └── profiles          (academy_id) — 1 user profile per academy
+  └── academy_members   (academy_id) — team membership + roles
+  └── branches          (academy_id) — training locations
+        └── players     (branch_id)  — subscribers
+              └── payments            (player_id) — billing history
+              └── attendance          (player_id) — daily presence
+              └── subscription_events (player_id) — lifecycle audit
+  └── staff             (academy_id) — coaches + admins
+  └── finance_tx        (academy_id) — income/expense ledger
+  └── calendar_events   (branch_id)  — training calendar
+  └── sessions          (branch_id)  — per-session cost records
+      </pre>
+    </div>
+
+    <h3>Row-Level Security Design</h3>
+    <p>
+      The most technically complex part of the database is the non-recursive RLS design. A naive approach of referencing <span class="inline-code">academy_members</span> inside policies creates a circular dependency (error 42P17: infinite recursion detected). AcademyBase solves this with a canonical "source of truth" pattern and SECURITY DEFINER helper functions.
+    </p>
+
+    <div class="callout callout-warn">
+      <div class="callout-icon">⚠</div>
+      <p><strong>The Recursion Problem:</strong> If <span class="inline-code">branches.SELECT</span> policy queries <span class="inline-code">academy_members</span>, and <span class="inline-code">academy_members.SELECT</span> policy queries <span class="inline-code">academies</span>, and <span class="inline-code">academies.SELECT</span> queries <span class="inline-code">academy_members</span> again — PostgreSQL enters infinite recursion. This is a common Supabase pitfall.</p>
+    </div>
+
+    <h4>Solution: SECURITY DEFINER Helpers</h4>
+    <div class="code-block">
+      <div class="code-lang">SQL</div>
+      <pre>
+<span class="cmt">-- Helper runs as postgres (BYPASSRLS) — breaks recursion</span>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> <span class="fn">public.my_academy_id</span>()
+<span class="kw">RETURNS</span> <span class="tp">uuid</span>
+<span class="kw">LANGUAGE</span> sql <span class="kw">STABLE SECURITY DEFINER</span>
+<span class="kw">AS</span> $$
+  <span class="kw">SELECT</span> academy_id <span class="kw">FROM</span> profiles
+  <span class="kw">WHERE</span> user_id = auth.uid();
+$$;
+
+<span class="cmt">-- RLS policy on branches uses helper, NOT inline subquery</span>
+<span class="kw">CREATE POLICY</span> <span class="str">"branches_select"</span> <span class="kw">ON</span> branches
+  <span class="kw">FOR SELECT USING</span> (academy_id = my_academy_id());
+      </pre>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Table</th><th>SELECT Policy</th><th>Write Policy</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>academies</td><td>owner OR member of academy</td><td>Owner only</td></tr>
+          <tr><td>profiles</td><td>user_id = auth.uid()</td><td>Self only</td></tr>
+          <tr><td>branches, players, payments</td><td>my_academy_id()</td><td>Owner + admin</td></tr>
+          <tr><td>finance_tx</td><td>Owner + admin</td><td>Owner + admin</td></tr>
+          <tr><td>attendance, calendar_events</td><td>All academy members</td><td>Owner + partner + branch_manager</td></tr>
+          <tr><td>invitations</td><td>Owner + invitee</td><td>Owner insert/delete; invitee accept</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Migration Strategy</h3>
+    <p>33 sequential migration files form the complete schema history. Each file is idempotent where possible (DROP IF EXISTS + CREATE OR REPLACE). Migration 14 is the critical fix migration that resolves the RLS recursion bug and can be safely re-run on any environment.</p>
+
+    <h3>Key Indexes</h3>
+    <ul>
+      <li><span class="inline-code">UNIQUE(academy_id, user_id)</span> on academy_members — prevents duplicate membership</li>
+      <li><span class="inline-code">UNIQUE(academy_id, player_id, date)</span> on attendance — upsert conflict target</li>
+      <li><span class="inline-code">UNIQUE(academy_id, auto_key)</span> on finance_tx — idempotent auto-sync entries</li>
+      <li><span class="inline-code">UNIQUE(branch_id, date)</span> on sessions — per-day field cost record</li>
+      <li><span class="inline-code">INDEX on payments(player_id, date)</span> — renewal rate queries scan by player</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         5. CORE MODULES                  ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-5">
+  <div class="container">
+    <div class="section-label">05 — Modules</div>
+    <h2>Core <span class="accent">Modules</span></h2>
+    <div class="section-intro">
+      AcademyBase consists of 8 core functional modules, each with its own route, data layer, and business logic. All modules share the session-scoped academy_id cache and parallel data fetching pattern.
+    </div>
+
+    <div class="module-grid">
+      <div class="module-card">
+        <div class="module-icon">📊</div>
+        <div class="module-title">Dashboard</div>
+        <div class="module-desc">
+          The central command center. Displays 8 KPI tiles (active players, revenue, renewal rate, upcoming renewals, expenses, net profit, staff count, branch count). Shows the top 3 AI insights, renewal rate chart, and finance trend. Data loads in a single <code>Promise.all</code> with 6 parallel Supabase queries. Renewal rate uses an <code>O(n)</code> useMemo map instead of naive <code>O(n×m)</code> filter. Finance KPIs are hidden for staff roles.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">~600 lines</span>
+          <span class="module-tag">Recharts</span>
+          <span class="module-tag">useMemo</span>
+          <span class="module-tag">Role-aware</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">👤</div>
+        <div class="module-title">Players</div>
+        <div class="module-desc">
+          Full player management with add/edit/delete/renew/extend/pause/resume operations. Filter tabs for All, Active, Ending Soon (7 days), and Expired. Status computed from payment period history (not just player.end_date — all periods are checked). Mobile shows card list, desktop shows data grid. Subscription modes: session-based (حصص) or monthly (شهري). Subscription period history preserved across renewals.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">~1000 lines</span>
+          <span class="module-tag">Responsive</span>
+          <span class="module-tag">CRUD Modals</span>
+          <span class="module-tag">Period Tracking</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">✅</div>
+        <div class="module-title">Attendance</div>
+        <div class="module-desc">
+          Sub-route under Players (<code>/players/attendance</code>). Branch tabs + date chips allow navigation by month. Session dates are computed from <code>branches.days[]</code> (no DB queries for calendar generation). Three-state per player: active (checkable), not_subscribed (locked), expired (locked). Optimistic UI toggles update local state immediately, rolling back on error. Players/branches cache across month changes; only attendance re-fetches.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">Optimistic UI</span>
+          <span class="module-tag">Period-aware</span>
+          <span class="module-tag">Cached load</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">💰</div>
+        <div class="module-title">Finance</div>
+        <div class="module-desc">
+          The most complex module (~1,500 lines). Auto-sync aggregates payments by month/branch into revenue entries and staff salaries into expense entries. Manual entries supported. Grouped view shows categories with sub-items. Users can suppress auto entries (sets source="suppressed") to prevent regeneration. Conflict key (academy_id, auto_key) ensures idempotent upserts. Sort by date/amount. Month selector persists across navigations.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">~1500 lines</span>
+          <span class="module-tag">Auto-sync</span>
+          <span class="module-tag">Upsert</span>
+          <span class="module-tag">Suppression</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">🏟</div>
+        <div class="module-title">Branches</div>
+        <div class="module-desc">
+          Branch management with configurable schedule (days of week), pricing (monthly or session-based), field rental cost tracking, and subscription mode. Branches drive attendance calendars and payment calculations. branch_ids[] array on staff records controls which staff are assigned to which branches for filtered views.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">Schedule Config</span>
+          <span class="module-tag">Pricing</span>
+          <span class="module-tag">Field Rental</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">📈</div>
+        <div class="module-title">Statistics</div>
+        <div class="module-desc">
+          Analytics page with 5 charts: finance trend AreaChart (3/6/12 month range), renewal rate BarChart per month, age distribution BarChart with branch filter, seasonality BarChart (best months for new subscriptions), and attendance rate by branch. Attendance re-fetches on range change; players/branches cached. All charts built with Recharts.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">~800 lines</span>
+          <span class="module-tag">5 Charts</span>
+          <span class="module-tag">Range Selector</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">📅</div>
+        <div class="module-title">Calendar</div>
+        <div class="module-desc">
+          Monthly grid calendar with training session generation from branch schedules (pure computation, no DB). Event types: training, match, canceled, special_event. <code>deduct_sessions</code> flag tracks session consumption. Canceled days show red dot indicator. Branch filter. Role-based edit access (owner/partner/branch_manager can edit; admin_staff view-only). Modal for create/edit/delete.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">~800 lines</span>
+          <span class="module-tag">RTL Grid</span>
+          <span class="module-tag">Role-gated</span>
+        </div>
+      </div>
+      <div class="module-card">
+        <div class="module-icon">💡</div>
+        <div class="module-title">Insights</div>
+        <div class="module-desc">
+          AI insights page powered by a pure-computation engine (<code>computeInsights()</code> in <code>src/lib/insights.ts</code>). Five signal types: renewal rate drop, revenue drop, upcoming expirations, consecutive absences, and low branch attendance. Severity classification (critical/warning/info). Filter by severity and scope. Dashboard shows top 3 insights. No additional DB calls — uses already-loaded data.
+        </div>
+        <div class="module-tags">
+          <span class="module-tag">~396 lines</span>
+          <span class="module-tag">Pure Computation</span>
+          <span class="module-tag">Severity Filter</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         6. FINANCIAL SYSTEM              ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-6" class="page-break">
+  <div class="container">
+    <div class="section-label">06 — Finance</div>
+    <h2>Financial <span class="accent">System</span></h2>
+    <div class="section-intro">
+      The financial engine is the most sophisticated module. It combines auto-generated entries from operational data with manual entries, giving academy owners a real-time view of their financial position.
+    </div>
+
+    <h3>Transaction Categories</h3>
+    <div class="card-grid">
+      <div class="card card-accent">
+        <h4>Revenue (إيراد)</h4>
+        <ul>
+          <li>Subscription payments (auto-synced from payments table)</li>
+          <li>Aggregated by month + branch</li>
+          <li>Separated by new vs. renewal payments</li>
+          <li>Manual revenue entries (sponsorships, events)</li>
+        </ul>
+      </div>
+      <div class="card card-blue">
+        <h4>Expenses (مصروف)</h4>
+        <ul>
+          <li>Staff monthly salaries (auto-synced from staff records)</li>
+          <li>Field rental costs (per-session from sessions table)</li>
+          <li>Manual expense entries (equipment, utilities)</li>
+          <li>Staff attendance adjustments (bonuses/deductions)</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Auto-Sync Engine</h3>
+    <p>When a user opens the finance page for a given month, the system automatically generates transactions from operational data via <span class="inline-code">upsertAutoFinanceTx()</span>. This uses <span class="inline-code">INSERT ... ON CONFLICT (academy_id, auto_key) DO UPDATE</span> — making every sync idempotent. Existing manual entries are never overwritten.</p>
+
+    <div class="code-block">
+      <div class="code-lang">TypeScript</div>
+      <pre>
+<span class="cmt">// Auto-sync generates entries like:</span>
+{
+  auto_key: <span class="str">"payment_2026-03_branch_uuid"</span>,  <span class="cmt">// unique per month+branch</span>
+  type: <span class="str">"إيراد"</span>,
+  amount: <span class="num">1250</span>,                        <span class="cmt">// sum of all branch payments</span>
+  source: <span class="str">"auto"</span>,
+  month: <span class="str">"2026-03"</span>
+}
+
+{
+  auto_key: <span class="str">"salary_2026-03_staff_uuid"</span>,   <span class="cmt">// unique per month+staff</span>
+  type: <span class="str">"مصروف"</span>,
+  amount: <span class="num">800</span>,                         <span class="cmt">// monthly_salary from staff record</span>
+  source: <span class="str">"auto"</span>,
+  month: <span class="str">"2026-03"</span>
+}
+      </pre>
+    </div>
+
+    <h3>Suppression System</h3>
+    <p>Instead of deleting auto-generated entries (which would cause them to regenerate on next sync), users can "suppress" entries. This sets <span class="inline-code">source = "suppressed"</span> and <span class="inline-code">amount = 0</span>. On subsequent syncs, the conflict resolution skips suppressed entries, preserving the user's intent.</p>
+
+    <h3>Session Deductions</h3>
+    <p>The sessions table tracks field rental cost per training session. When a calendar event is marked with <span class="inline-code">deduct_sessions = true</span>, it contributes to the branch's cost calculation for that month. This enables per-session financial tracking alongside monthly aggregates.</p>
+
+    <h3>Salary Calculation</h3>
+    <p>Staff salaries are fixed monthly amounts stored in <span class="inline-code">staff.monthly_salary</span> (non-negative constraint enforced by DB). Staff attendance adjustments (bonuses, deductions tracked in <span class="inline-code">staff_attendance</span> table) can modify the effective monthly amount. The auto-sync reads both and computes net salary per staff member.</p>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Operation</th><th>Source</th><th>Auto-Key Pattern</th><th>Editable?</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Subscription revenue</td><td>payments aggregation</td><td>payment_{month}_{branch_id}</td><td class="td-highlight">Suppressible</td></tr>
+          <tr><td>Staff salary</td><td>staff.monthly_salary</td><td>salary_{month}_{staff_id}</td><td class="td-highlight">Suppressible</td></tr>
+          <tr><td>Field rental</td><td>sessions.field_cost</td><td>rent_{month}_{branch_id}</td><td class="td-highlight">Suppressible</td></tr>
+          <tr><td>Manual entry</td><td>User input</td><td>null</td><td class="td-highlight">Full CRUD</td></tr>
+          <tr><td>Salary adjustment</td><td>staff_attendance</td><td>adj_{month}_{staff_id}</td><td class="td-highlight">Suppressible</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         7. KPI & ANALYTICS               ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-7">
+  <div class="container">
+    <div class="section-label">07 — Analytics</div>
+    <h2>KPI &amp; <span class="accent">Analytics</span></h2>
+    <div class="section-intro">
+      The analytics system combines dashboard KPIs, the Statistics page with 5 chart types, and the Insights engine with 5 signal types — giving academy owners a multi-dimensional view of their business health.
+    </div>
+
+    <h3>Dashboard KPIs</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>KPI</th><th>Formula</th><th>Visibility</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Active Players</td><td>Players where end_date ≥ today AND not paused</td><td>All roles</td></tr>
+          <tr><td>Expiring Soon</td><td>Players where 0 ≤ (end_date - today) ≤ 7 days</td><td>All roles</td></tr>
+          <tr><td>Monthly Revenue</td><td>Sum of payments.amount for current month</td><td>Owner + admin</td></tr>
+          <tr><td>Monthly Expenses</td><td>Sum of finance_tx where type="مصروف" for current month</td><td>Owner + admin</td></tr>
+          <tr><td>Net Profit</td><td>Revenue - Expenses</td><td>Owner + admin</td></tr>
+          <tr><td>Renewal Rate</td><td>(Renewed players / Total active last month) × 100</td><td>All roles</td></tr>
+          <tr><td>Staff Count</td><td>Count of is_active staff</td><td>All roles</td></tr>
+          <tr><td>Branch Count</td><td>Count of branches</td><td>All roles</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Renewal Rate Algorithm (Fixed)</h3>
+    <p>
+      The renewal rate calculation required a significant bug fix. The original implementation counted payment rows by <span class="inline-code">kind</span> field, which could produce a count of 2 for a single player who made two payments in a month. The corrected algorithm:
+    </p>
+    <ul>
+      <li>Groups payments by <strong>player_id</strong> using a Map (O(n) instead of O(n×m))</li>
+      <li>Finds each player's <strong>first-ever payment date</strong> (earliest date across all payment history)</li>
+      <li>Classifies a player as "new" if their first payment falls in the selected month</li>
+      <li>Classifies a player as "renew" if they have payment history before the selected month</li>
+      <li>Counts distinct players, not payment rows</li>
+    </ul>
+
+    <h3>Insights Engine</h3>
+    <p>
+      The insights engine (<span class="inline-code">src/lib/insights.ts</span>, 396 lines) is a pure function — it takes loaded data as input and returns a sorted array of insight objects. This design enables testing without DB access and reuse across dashboard and insights page.
+    </p>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Signal</th><th>Critical Threshold</th><th>Warning Threshold</th><th>Data Source</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Renewal Rate Drop</td><td>≥ 25% drop month-over-month</td><td>≥ 10% drop</td><td>payments</td></tr>
+          <tr><td>Revenue Drop</td><td>≥ 30% drop month-over-month</td><td>≥ 15% drop</td><td>payments</td></tr>
+          <tr><td>Upcoming Expirations</td><td>≥ 5 players expiring in 7 days</td><td>≥ 2 players</td><td>players</td></tr>
+          <tr><td>Consecutive Absences</td><td>≥ 5 absences in a row</td><td>≥ 3 absences</td><td>attendance</td></tr>
+          <tr><td>Low Branch Attendance</td><td>≥ 35% below academy average</td><td>≥ 20% below</td><td>attendance</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Statistics Charts</h3>
+    <div class="card-grid-3">
+      <div class="card">
+        <h4>Finance Trend</h4>
+        <p>AreaChart showing revenue, expenses, and net profit over 3/6/12 months with a range selector.</p>
+      </div>
+      <div class="card">
+        <h4>Renewal Rate</h4>
+        <p>BarChart showing new vs. renewed players per month with color-coded bars (green = new, teal = renew).</p>
+      </div>
+      <div class="card">
+        <h4>Age Distribution</h4>
+        <p>BarChart of player age groups with optional branch filter. Reveals target demographic.</p>
+      </div>
+      <div class="card">
+        <h4>Seasonality</h4>
+        <p>BarChart of new subscriptions by month of year. Reveals peak enrollment seasons.</p>
+      </div>
+      <div class="card">
+        <h4>Attendance Rate</h4>
+        <p>BarChart of attendance percentage by branch. Refetches on range change; compares branch performance.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         8. AUTHENTICATION & SECURITY     ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-8" class="page-break">
+  <div class="container">
+    <div class="section-label">08 — Security</div>
+    <h2>Authentication &amp; <span class="accent">Security</span></h2>
+    <div class="section-intro">
+      Security is enforced at three layers: middleware (route protection), RLS (data access), and service-role server actions (privileged operations). The design follows a zero-trust data model.
+    </div>
+
+    <h3>Authentication Flow</h3>
+    <div class="flow-step">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <h4>Sign Up / Sign In</h4>
+        <p>Standard email/password via Supabase Auth. Returns a JWT token stored in the browser (cookies via Supabase SSR package). Email confirmation supported.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <h4>Middleware Route Guard</h4>
+        <p><span class="inline-code">middleware.ts</span> runs on every request. Reads the Supabase session from cookies. If no valid session, redirects to <span class="inline-code">/login?next={path}</span>. Server Actions (POST with <span class="inline-code">next-action</span> header) bypass the redirect to prevent client errors.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <h4>Academy Registration</h4>
+        <p>Server Action <span class="inline-code">setupAcademyAction()</span> uses service-role key to create: academy record → profile (with academy_id) → academy_members(role="owner"). Atomic within a single Server Action scope.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <h4>JWT Token Refresh (iOS Fix)</h4>
+        <p>iOS Safari's <span class="inline-code">navigator.locks</span> API has a 10s timeout. To prevent contention when multiple components race to call <span class="inline-code">getSession()</span>, a singleton Supabase client is used in the browser. Only one lock holder at a time — no timeout errors on iPad/iPhone.</p>
+      </div>
+    </div>
+
+    <h3>Role System</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Role</th><th>Arabic Label</th><th>Finance Access</th><th>Staff Manage</th><th>Branch Edit</th><th>Player Edit</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-highlight">owner</td><td>المالك</td><td><span class="badge badge-green">Yes</span></td><td><span class="badge badge-green">Yes</span></td><td><span class="badge badge-green">Yes</span></td><td><span class="badge badge-green">Yes</span></td></tr>
+          <tr><td class="td-highlight">partner</td><td>شريك</td><td><span class="badge badge-green">Yes</span></td><td><span class="badge badge-amber">Limited</span></td><td><span class="badge badge-green">Yes</span></td><td><span class="badge badge-green">Yes</span></td></tr>
+          <tr><td class="td-highlight">branch_manager</td><td>مدير فرع</td><td><span class="badge badge-amber">If granted</span></td><td><span class="badge badge-red">No</span></td><td><span class="badge badge-amber">Own branches</span></td><td><span class="badge badge-green">Yes</span></td></tr>
+          <tr><td class="td-highlight">admin_staff</td><td>اداري</td><td><span class="badge badge-red">No</span></td><td><span class="badge badge-red">No</span></td><td><span class="badge badge-red">No</span></td><td><span class="badge badge-amber">View only</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Invitation System</h3>
+    <p>Team members are onboarded via a 32-byte random hex token (256-bit entropy — brute-force infeasible). The invite link is <span class="inline-code">/invite/{token}</span>. On acceptance:</p>
+    <ul>
+      <li>Server validates email match between invite and current user</li>
+      <li>Upserts <span class="inline-code">academy_members</span> with the specified role</li>
+      <li>Updates <span class="inline-code">profiles.academy_id</span> (the canonical data store)</li>
+      <li>Invite token expires after the configured <span class="inline-code">expires_at</span> timestamp</li>
+    </ul>
+
+    <h3>Security Posture Assessment</h3>
+    <div class="card-grid">
+      <div class="card card-accent">
+        <h4>Strengths</h4>
+        <ul>
+          <li>RLS enforced at DB layer — bypass is impossible without service-role key</li>
+          <li>Service-role key used only in Server Actions (never exposed to client)</li>
+          <li>256-bit invite tokens (cryptographically secure)</li>
+          <li>No sensitive data in localStorage or client state</li>
+          <li>Singleton client prevents iOS Safari lock exploitation</li>
+        </ul>
+      </div>
+      <div class="card card-amber">
+        <h4>Areas for Improvement</h4>
+        <ul>
+          <li>No rate limiting on auth endpoints (Supabase defaults apply)</li>
+          <li>No audit log for admin actions (player delete, finance override)</li>
+          <li>Branch-scoped staff can theoretically edit players in other branches via direct PostgREST calls</li>
+          <li>No 2FA support currently</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         9. CODEBASE STRUCTURE            ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-9">
+  <div class="container">
+    <div class="section-label">09 — Codebase</div>
+    <h2>Codebase <span class="accent">Structure</span></h2>
+    <div class="section-intro">
+      The project follows Next.js App Router conventions with a clear separation between UI pages, reusable components, data access lib, and database migrations.
+    </div>
+
+    <div class="code-block">
+      <div class="code-lang">Directory Tree</div>
+      <pre>
+academybase/
+├── app/                          <span class="cmt">← Next.js App Router</span>
+│   ├── (app)/                    <span class="cmt">← Protected layout group</span>
+│   │   ├── layout.tsx            <span class="cmt">← Client: sidebar state + mobile header</span>
+│   │   ├── dashboard/page.tsx    <span class="cmt">← Main KPI dashboard (~600 lines)</span>
+│   │   ├── players/
+│   │   │   ├── page.tsx          <span class="cmt">← Player CRUD (~1000 lines)</span>
+│   │   │   ├── attendance/page.tsx <span class="cmt">← Attendance tracking</span>
+│   │   │   └── layout.tsx        <span class="cmt">← Tab bar for players/attendance</span>
+│   │   ├── branches/page.tsx     <span class="cmt">← Branch management</span>
+│   │   ├── finance/
+│   │   │   ├── page.tsx          <span class="cmt">← Finance ledger (~1500 lines)</span>
+│   │   │   └── reports/page.tsx  <span class="cmt">← Financial reports</span>
+│   │   ├── staff/
+│   │   │   ├── page.tsx          <span class="cmt">← Staff management</span>
+│   │   │   └── attendance/page.tsx <span class="cmt">← Staff attendance</span>
+│   │   ├── calendar/page.tsx     <span class="cmt">← Training calendar (~800 lines)</span>
+│   │   ├── statistics/page.tsx   <span class="cmt">← Analytics charts (~800 lines)</span>
+│   │   ├── insights/page.tsx     <span class="cmt">← AI insights</span>
+│   │   └── settings/
+│   │       ├── page.tsx          <span class="cmt">← Academy settings</span>
+│   │       └── team/page.tsx     <span class="cmt">← Team management (owner only)</span>
+│   ├── invite/[token]/page.tsx   <span class="cmt">← Server: accept invite</span>
+│   ├── login/ & register/        <span class="cmt">← Auth pages</span>
+│   ├── components/
+│   │   ├── Sidebar.tsx           <span class="cmt">← RTL sidebar with role visibility</span>
+│   │   └── ui/Button.tsx         <span class="cmt">← Button component</span>
+│   └── layout.tsx                <span class="cmt">← Root: dir="rtl", dark theme</span>
+├── src/lib/
+│   ├── insights.ts               <span class="cmt">← Pure insights computation (396 lines)</span>
+│   └── supabase/
+│       ├── academyId.ts          <span class="cmt">← Session-scoped ID cache (CRITICAL)</span>
+│       ├── roles.ts              <span class="cmt">← Role system + getMembership()</span>
+│       ├── browser.ts            <span class="cmt">← iOS Safari singleton client</span>
+│       ├── server.ts             <span class="cmt">← SSR client</span>
+│       ├── admin.ts              <span class="cmt">← Service-role client</span>
+│       ├── players.ts            <span class="cmt">← Player CRUD</span>
+│       ├── branches.ts           <span class="cmt">← Branch CRUD</span>
+│       ├── payments.ts           <span class="cmt">← Payment CRUD + periods</span>
+│       ├── finance.ts            <span class="cmt">← Finance TX + auto-sync</span>
+│       ├── staff.ts              <span class="cmt">← Staff CRUD</span>
+│       ├── attendance.ts         <span class="cmt">← Attendance CRUD</span>
+│       └── calendar.ts           <span class="cmt">← Calendar events CRUD</span>
+├── supabase/                     <span class="cmt">← 33 migration files</span>
+├── middleware.ts                 <span class="cmt">← Auth guard</span>
+└── next.config.ts                <span class="cmt">← Recharts tree-shaking</span>
+      </pre>
+    </div>
+
+    <h3>Key File Responsibilities</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>File</th><th>Lines</th><th>Responsibility</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-blue">app/(app)/finance/page.tsx</td><td>~1500</td><td>Finance ledger with auto-sync, manual entry, grouping, suppression</td></tr>
+          <tr><td class="td-blue">app/(app)/players/page.tsx</td><td>~1000</td><td>Player CRUD with subscription periods, filters, responsive layout</td></tr>
+          <tr><td class="td-blue">app/(app)/statistics/page.tsx</td><td>~800</td><td>5 analytics charts with range selector and data caching</td></tr>
+          <tr><td class="td-blue">app/(app)/calendar/page.tsx</td><td>~800</td><td>Monthly calendar with event management and role-based edit</td></tr>
+          <tr><td class="td-blue">app/(app)/dashboard/page.tsx</td><td>~600</td><td>KPI dashboard with renewal rate chart and top insights</td></tr>
+          <tr><td class="td-blue">src/lib/insights.ts</td><td>396</td><td>Pure computation engine for 5 insight signal types</td></tr>
+          <tr><td class="td-blue">src/lib/supabase/academyId.ts</td><td>137</td><td>Session-scoped Promise cache for academy_id resolution</td></tr>
+          <tr><td class="td-blue">src/lib/supabase/roles.ts</td><td>117</td><td>4-tier role system with getMembership() and permission helpers</td></tr>
+          <tr><td class="td-blue">src/lib/supabase/finance.ts</td><td>115</td><td>Finance TX CRUD + upsertAutoFinanceTx() with conflict resolution</td></tr>
+          <tr><td class="td-blue">middleware.ts</td><td>81</td><td>JWT validation + route protection + Server Action bypass</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         10. PERFORMANCE ANALYSIS         ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-10" class="page-break">
+  <div class="container">
+    <div class="section-label">10 — Performance</div>
+    <h2>Performance <span class="accent">Analysis</span></h2>
+    <div class="section-intro">
+      The application has several well-implemented performance optimizations, but also contains areas with scaling concerns as data volumes grow.
+    </div>
+
+    <h3>Existing Optimizations</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Optimization</th><th>Impact</th><th>File</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Academy ID module cache</td><td class="td-highlight">N profile queries → 1 per session</td><td>academyId.ts</td></tr>
+          <tr><td>iOS Safari singleton client</td><td class="td-highlight">Eliminates 10s lock timeout on mobile</td><td>browser.ts</td></tr>
+          <tr><td>Promise.all concurrent fetches</td><td class="td-highlight">Sequential → parallel DB queries</td><td>All pages</td></tr>
+          <tr><td>useMemo renewal rate map</td><td class="td-highlight">O(n×m) → O(n)</td><td>dashboard/page.tsx</td></tr>
+          <tr><td>Attendance static load cache</td><td class="td-highlight">3 queries cached across month changes</td><td>attendance/page.tsx</td></tr>
+          <tr><td>Recharts tree-shaking</td><td class="td-highlight">~70% bundle reduction (~420KB → ~130KB)</td><td>next.config.ts</td></tr>
+          <tr><td>Optimistic attendance toggle</td><td class="td-highlight">Instant UI response, no loading spinner</td><td>attendance/page.tsx</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Performance Score Estimates</h3>
+    <div style="margin-bottom:32px">
+      <div class="perf-row">
+        <div class="perf-label">Initial page load (dashboard)</div>
+        <div class="perf-bar"><div class="perf-fill perf-fill-green" style="width:75%"></div></div>
+        <div class="perf-score">75</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Academy ID resolution</div>
+        <div class="perf-bar"><div class="perf-fill perf-fill-green" style="width:95%"></div></div>
+        <div class="perf-score">95</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Bundle size efficiency</div>
+        <div class="perf-bar"><div class="perf-fill perf-fill-green" style="width:82%"></div></div>
+        <div class="perf-score">82</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Finance page load (large data)</div>
+        <div class="perf-bar"><div class="perf-fill perf-fill-amber" style="width:55%"></div></div>
+        <div class="perf-score">55</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Attendance at scale (1000+ players)</div>
+        <div class="perf-bar"><div class="perf-fill perf-fill-amber" style="width:50%"></div></div>
+        <div class="perf-score">50</div>
+      </div>
+      <div class="perf-row">
+        <div class="perf-label">Mobile responsiveness</div>
+        <div class="perf-bar"><div class="perf-fill perf-fill-blue" style="width:80%"></div></div>
+        <div class="perf-score">80</div>
+      </div>
+    </div>
+
+    <h3>Scaling Concerns</h3>
+    <div class="callout callout-warn">
+      <div class="callout-icon">⚠</div>
+      <p><strong>Full table loads:</strong> Pages like Players and Finance currently fetch all rows for the academy and filter in the browser. With 1000+ players or 5 years of finance history, this becomes a scaling bottleneck. Server-side pagination is not yet implemented.</p>
+    </div>
+    <div class="callout callout-warn">
+      <div class="callout-icon">⚠</div>
+      <p><strong>Attendance table growth:</strong> At 100 players × 3 sessions/week × 52 weeks = 15,600 rows/year. A 5-year academy with 500 players would have ~780,000 attendance rows. The attendance page loads all rows for a month, which is manageable, but the attendance trend query in Statistics loads potentially months of data.</p>
+    </div>
+    <div class="callout callout-info">
+      <div class="callout-icon">ℹ</div>
+      <p><strong>Insights not memoized at page level:</strong> <span class="inline-code">computeInsights()</span> re-runs on every render cycle where data exists. While it's a pure function and relatively fast, wrapping it in <span class="inline-code">useMemo</span> would prevent redundant computation on unrelated state updates.</p>
+    </div>
+
+    <h3>Database Query Analysis</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Query</th><th>Current</th><th>Concern</th><th>Recommendation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>List all players</td><td>Full table scan with RLS</td><td>Scale: 1000+ rows</td><td>Server-side pagination + search</td></tr>
+          <tr><td>List all payments</td><td>Full table for academy</td><td>Grows indefinitely</td><td>Range-based fetch (last N months)</td></tr>
+          <tr><td>Finance TX list</td><td>All TX for academy</td><td>Years of data</td><td>Paginated + date-range filter on server</td></tr>
+          <tr><td>Attendance by month</td><td>Bounded by month</td><td>Manageable</td><td>Index on (academy_id, date) would help</td></tr>
+          <tr><td>resolveAcademyId()</td><td>1 query/session (cached)</td><td>None</td><td>Current implementation is optimal</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         11. PRODUCT WEAKNESSES           ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-11">
+  <div class="container">
+    <div class="section-label">11 — Weaknesses</div>
+    <h2>Product <span class="accent">Weaknesses</span></h2>
+    <div class="section-intro">
+      An honest assessment of current limitations across UX, architecture, data design, and performance — to guide the next improvement cycle.
+    </div>
+
+    <h3>UX Weaknesses</h3>
+    <div class="card">
+      <h4>No Global Search</h4>
+      <p>There is no cross-module search. Finding a specific player requires navigating to the Players page and using the filter. A cmd+K style command palette would significantly improve navigation speed for power users managing large academies.</p>
+    </div>
+    <div class="card">
+      <h4>No Notification System</h4>
+      <p>The insights engine identifies critical signals (expiring players, attendance drops) but there is no proactive notification — not even an in-app notification badge. Users must actively visit the insights page to see alerts.</p>
+    </div>
+    <div class="card">
+      <h4>Arabic-Only Interface</h4>
+      <p>All UI strings are hardcoded in Arabic. There is no i18n layer. Expanding to non-Arabic markets or international coaches on the team would require significant string extraction work.</p>
+    </div>
+    <div class="card">
+      <h4>No Bulk Operations</h4>
+      <p>Players can only be acted upon one at a time. For academies that want to send renewals to 50 expiring players simultaneously, or mark a class of players as attended after a session, there is no multi-select or bulk action capability.</p>
+    </div>
+
+    <h3>Architecture Weaknesses</h3>
+    <div class="card">
+      <h4>No Server-Side Pagination</h4>
+      <p>All data is fetched client-side with RLS filtering. As academies grow (500+ players, 3+ years of finance history), initial page loads will degrade. No pagination, virtual scrolling, or server-side filtering is implemented.</p>
+    </div>
+    <div class="card">
+      <h4>No Optimistic Updates Outside Attendance</h4>
+      <p>Only the attendance toggle has optimistic updates. Player edits, payment creation, and finance entries all show loading states with no immediate UI feedback. This creates a noticeable lag feel even when the DB operation succeeds quickly.</p>
+    </div>
+    <div class="card">
+      <h4>Concurrent Finance Sync Risk</h4>
+      <p>If two users (owner + admin) open the finance page simultaneously, both trigger <span class="inline-code">upsertAutoFinanceTx()</span> for the same month. The UNIQUE conflict resolution handles this correctly, but under high concurrency, there's a theoretical risk of duplicate entries if the conflict key logic changes.</p>
+    </div>
+    <div class="card">
+      <h4>No Real-Time Updates</h4>
+      <p>Supabase provides WebSocket-based Realtime subscriptions, but none are used. If two team members are viewing the players list simultaneously and one adds a player, the other won't see the update until they refresh.</p>
+    </div>
+
+    <h3>Data Design Weaknesses</h3>
+    <div class="card">
+      <h4>Subscription Period Gaps</h4>
+      <p>When a player renews, the new <span class="inline-code">start_date</span> might create a gap between the old subscription end and the new start. The attendance page handles this correctly (checks all periods), but the Players page status display uses <span class="inline-code">player.end_date</span> which is overwritten on each renewal, losing the previous period's end date from the player record itself.</p>
+    </div>
+    <div class="card">
+      <h4>Branch_ids Array on Staff</h4>
+      <p>Staff assignment to branches uses a PostgreSQL UUID array (<span class="inline-code">branch_ids uuid[]</span>). This is not normalized — it's not enforced by foreign keys, there's no cascading behavior on branch delete, and it can't be efficiently joined with SQL. A junction table would be more robust.</p>
+    </div>
+
+    <h3>Performance Weaknesses</h3>
+    <div class="card">
+      <h4>Finance Page is the Heaviest Page</h4>
+      <p>At ~1,500 lines, the finance page loads the most data and performs the most complex client-side aggregation. Auto-sync logic that runs on mount makes 5–7 separate upsert calls. As data grows, this page will be the first to show noticeable slowdowns.</p>
+    </div>
+    <div class="card">
+      <h4>Insights Not Wrapped in useMemo</h4>
+      <p><span class="inline-code">computeInsights()</span> iterates all payments, players, and attendance records on every call. Without <span class="inline-code">useMemo</span>, this recomputes on every state update in the page — including unrelated state like modal open/close events.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         12. IMPROVEMENT OPPORTUNITIES    ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-12" class="page-break">
+  <div class="container">
+    <div class="section-label">12 — Improvements</div>
+    <h2>Improvement <span class="accent">Opportunities</span></h2>
+    <div class="section-intro">
+      Prioritized, actionable improvements organized by impact area. Each recommendation includes implementation guidance and expected benefit.
+    </div>
+
+    <h3>High Priority — Architecture</h3>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(252,96,96,0.15);border-color:rgba(252,96,96,0.3);color:#fc6060">1</div>
+      <div class="flow-content">
+        <h4>Server-Side Pagination for Players and Finance</h4>
+        <p>Implement <span class="inline-code">range(offset, limit)</span> Supabase queries with server-side filtering. Use Next.js URL search params for page state. Expected: 80% reduction in initial data load for large academies. Required for scaling beyond 500 players.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(252,96,96,0.15);border-color:rgba(252,96,96,0.3);color:#fc6060">2</div>
+      <div class="flow-content">
+        <h4>Database Indexes on High-Traffic Queries</h4>
+        <p>Add composite indexes: <span class="inline-code">(academy_id, date)</span> on attendance and payments; <span class="inline-code">(academy_id, end_date)</span> on players; <span class="inline-code">(academy_id, month)</span> on finance_tx. Expected: 5–10× query speed improvement at scale.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(252,96,96,0.15);border-color:rgba(252,96,96,0.3);color:#fc6060">3</div>
+      <div class="flow-content">
+        <h4>Supabase Realtime Subscriptions</h4>
+        <p>Subscribe to players and attendance table changes via <span class="inline-code">supabase.channel()</span>. Enable multi-user collaboration without refresh. Particularly impactful for attendance taking where multiple staff might mark the same session.</p>
+      </div>
+    </div>
+
+    <h3>Medium Priority — UX</h3>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(0,224,255,0.12);border-color:rgba(0,224,255,0.25);color:var(--accent-blue)">4</div>
+      <div class="flow-content">
+        <h4>Global Command Palette (Cmd+K)</h4>
+        <p>Implement a fuzzy-search command palette over players, branches, and navigation. Libraries: cmdk or custom implementation. Transforms player lookup from navigate→filter→find to instant search. Critical for large academies.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(0,224,255,0.12);border-color:rgba(0,224,255,0.25);color:var(--accent-blue)">5</div>
+      <div class="flow-content">
+        <h4>In-App Notification System</h4>
+        <p>Add a notification bell in the header that runs a lightweight version of <span class="inline-code">computeInsights()</span> on mount. Show count badge for critical signals. Toast notifications for actions. Enables passive awareness without visiting insights page.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(0,224,255,0.12);border-color:rgba(0,224,255,0.25);color:var(--accent-blue)">6</div>
+      <div class="flow-content">
+        <h4>Bulk Player Actions</h4>
+        <p>Add multi-select checkboxes on the players list. Enable bulk: renew, extend, message, export to CSV. Especially valuable at end-of-month for bulk renewal processing. Reduces 50 individual modal interactions to 1 bulk action.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(0,224,255,0.12);border-color:rgba(0,224,255,0.25);color:var(--accent-blue)">7</div>
+      <div class="flow-content">
+        <h4>Optimistic Updates Across All Forms</h4>
+        <p>Extend the optimistic update pattern from attendance to player CRUD, payments, and branch edits. Update local state immediately on form submit, revert on error. Expected: perceived performance improvement of 200–800ms on all write operations.</p>
+      </div>
+    </div>
+
+    <h3>Lower Priority — Code Quality</h3>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(0,255,156,0.08);border-color:rgba(0,255,156,0.2);color:var(--accent-green)">8</div>
+      <div class="flow-content">
+        <h4>Wrap computeInsights() in useMemo</h4>
+        <p>Add <span class="inline-code">useMemo(() =&gt; computeInsights(input), [players, payments, attendance, branches])</span> in both the dashboard and insights pages. Prevents recomputation on unrelated state updates. Small change, immediate gain.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(0,255,156,0.08);border-color:rgba(0,255,156,0.2);color:var(--accent-green)">9</div>
+      <div class="flow-content">
+        <h4>Normalize Staff Branch Assignment</h4>
+        <p>Replace <span class="inline-code">staff.branch_ids uuid[]</span> with a junction table <span class="inline-code">staff_branch_assignments(staff_id, branch_id)</span>. Enables FK constraints, cascade on branch delete, and efficient branch-based staff queries.</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num" style="background:rgba(0,255,156,0.08);border-color:rgba(0,255,156,0.2);color:var(--accent-green)">10</div>
+      <div class="flow-content">
+        <h4>Extract Common Page Shell Component</h4>
+        <p>All pages share a pattern: loading state → error state → data display. Extract a <span class="inline-code">&lt;PageShell loading={} error={}&gt;</span> component to reduce boilerplate across the 8 main pages. Reduces ~50 lines of repetitive code per page.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║         13. FUTURE ROADMAP               ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<section id="section-13">
+  <div class="container">
+    <div class="section-label">13 — Roadmap</div>
+    <h2>Future <span class="accent">Roadmap</span></h2>
+    <div class="section-intro">
+      Strategic feature directions that would transform AcademyBase from an operational tool into an intelligent academy intelligence platform.
+    </div>
+
+    <h3>Phase 1 — Enhanced Intelligence (Q2 2026)</h3>
+    <div class="card-grid">
+      <div class="card card-accent">
+        <h4>Advanced AI Insights</h4>
+        <p>Extend the insights engine with LLM-generated natural language explanations. Use Claude API to produce actionable recommendations in Arabic: "3 players from Branch A have missed 4+ consecutive sessions. Consider sending a WhatsApp follow-up this week."</p>
+        <ul>
+          <li>Connect <span class="inline-code">computeInsights()</span> output to Claude API</li>
+          <li>Arabic-language response generation</li>
+          <li>One-click action triggers from insight cards</li>
+          <li>Weekly digest email with top 5 insights</li>
+        </ul>
+      </div>
+      <div class="card card-blue">
+        <h4>Predictive Renewal Analytics</h4>
+        <p>Use historical payment data to predict which players are likely to churn. Train a simple logistic regression model on: attendance rate, payment timeliness, session completion rate, and absence streaks.</p>
+        <ul>
+          <li>Churn probability score per player (0–100%)</li>
+          <li>Risk segmentation: high/medium/low</li>
+          <li>Renewal probability chart on dashboard</li>
+          <li>Proactive re-engagement list generation</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Phase 2 — Platform Expansion (Q3 2026)</h3>
+    <div class="card-grid">
+      <div class="card card-purple">
+        <h4>Academy Benchmarking</h4>
+        <p>Anonymized cross-academy benchmarking showing how an academy's renewal rate, revenue per player, and attendance rate compare to similar academies by size and geography. Requires opt-in data sharing and aggregate-only API.</p>
+        <ul>
+          <li>Percentile ranking (top 25% in region)</li>
+          <li>Benchmark dashboard card</li>
+          <li>Gap analysis vs. top performers</li>
+          <li>Best practice recommendations</li>
+        </ul>
+      </div>
+      <div class="card card-amber">
+        <h4>Financial Forecasting</h4>
+        <p>12-month revenue and expense forecast based on historical trends, current subscription mix, and seasonal patterns identified in the Statistics module.</p>
+        <ul>
+          <li>Monte Carlo simulation with confidence intervals</li>
+          <li>Scenario modeling (10% churn vs. 20% growth)</li>
+          <li>Break-even analysis per branch</li>
+          <li>Staff salary vs. revenue ratio alerts</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Phase 3 — Ecosystem (Q4 2026)</h3>
+    <div class="card-grid">
+      <div class="card">
+        <h4>Parent & Player Portal</h4>
+        <p>A separate read-only portal where parents can view their child's attendance record, payment history, and upcoming schedule. Reduces inbound WhatsApp messages to academy staff by 60–70% based on industry benchmarks.</p>
+      </div>
+      <div class="card">
+        <h4>WhatsApp Integration</h4>
+        <p>Automated WhatsApp messages via WhatsApp Business API: renewal reminders (7 days before expiry), absence alerts (3 consecutive misses), payment confirmations. All triggered from the insights engine signals.</p>
+      </div>
+      <div class="card">
+        <h4>Mobile Native App</h4>
+        <p>React Native or Expo wrapper for the attendance and calendar modules. Enables offline-first attendance marking that syncs when connectivity is restored. Critical for field operations with poor internet.</p>
+      </div>
+      <div class="card">
+        <h4>Player Performance Tracking</h4>
+        <p>Add a performance assessment module allowing coaches to score players on configurable attributes (speed, technique, teamwork). Progress tracking over time. Feeds into AI insights about player development trajectories.</p>
+      </div>
+    </div>
+
+    <h3>Suggested Development Priority Matrix</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>Feature</th><th>Effort</th><th>Impact</th><th>Priority</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Server-side pagination</td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-green">High</span></td><td><span class="badge badge-red">P0</span></td></tr>
+          <tr><td>Notification system</td><td><span class="badge badge-green">Low</span></td><td><span class="badge badge-green">High</span></td><td><span class="badge badge-red">P0</span></td></tr>
+          <tr><td>Supabase Realtime</td><td><span class="badge badge-green">Low</span></td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-amber">P1</span></td></tr>
+          <tr><td>Command palette search</td><td><span class="badge badge-green">Low</span></td><td><span class="badge badge-green">High</span></td><td><span class="badge badge-amber">P1</span></td></tr>
+          <tr><td>Bulk player actions</td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-green">High</span></td><td><span class="badge badge-amber">P1</span></td></tr>
+          <tr><td>AI insights (Claude API)</td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-green">High</span></td><td><span class="badge badge-amber">P1</span></td></tr>
+          <tr><td>Predictive churn model</td><td><span class="badge badge-red">High</span></td><td><span class="badge badge-green">High</span></td><td><span class="badge badge-blue">P2</span></td></tr>
+          <tr><td>WhatsApp integration</td><td><span class="badge badge-red">High</span></td><td><span class="badge badge-green">High</span></td><td><span class="badge badge-blue">P2</span></td></tr>
+          <tr><td>Parent portal</td><td><span class="badge badge-red">High</span></td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-blue">P2</span></td></tr>
+          <tr><td>Academy benchmarking</td><td><span class="badge badge-red">High</span></td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-purple">P3</span></td></tr>
+          <tr><td>Financial forecasting</td><td><span class="badge badge-red">High</span></td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-purple">P3</span></td></tr>
+          <tr><td>Mobile native app</td><td><span class="badge badge-red">Very High</span></td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-purple">P3</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-ok">
+      <div class="callout-icon">✓</div>
+      <p><strong>Strategic Recommendation:</strong> The current codebase is production-ready and architecturally sound. The highest-ROI next steps are: (1) server-side pagination to unblock scale, (2) notification system to surface existing insights proactively, and (3) Claude API integration to provide natural-language recommendations in Arabic — transforming the existing pure-computation insights engine into a conversational intelligence layer with minimal additional infrastructure.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ╔══════════════════════════════════════════╗ -->
+<!-- ║              FOOTER                      ║ -->
+<!-- ╚══════════════════════════════════════════╝ -->
+<div class="footer">
+  <div class="container">
+    <p style="color:var(--accent-green);font-weight:600;margin-bottom:8px">AcademyBase — Technical Report</p>
+    <p>Generated March 2026 · Version 1.0.0 · Confidential Internal Document</p>
+    <p style="margin-top:12px;color:var(--text-muted)">Next.js 16 · React 19 · TypeScript 5 · Supabase · Tailwind CSS 4</p>
+  </div>
+</div>
+
+</body>
+</html>

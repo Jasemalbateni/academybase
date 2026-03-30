@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/src/lib/supabase/browser";
 import { getUserRole, roleLabel, type UserRole } from "@/src/lib/supabase/roles";
+import { clearSidebarCache } from "@/app/components/Sidebar";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -16,10 +17,13 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [academyName, setAcademyName] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [msgType, setMsgType] = useState<"ok" | "err">("ok");
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -60,10 +64,10 @@ export default function SettingsPage() {
       setFullName(profile.full_name ?? "");
       setPhone(profile.phone ?? "");
 
-      // Load academy name
+      // Load academy name + logo
       const { data: academy, error: aErr } = await supabase
         .from("academies")
-        .select("name")
+        .select("name, logo_url")
         .eq("id", profile.academy_id)
         .single();
 
@@ -73,11 +77,72 @@ export default function SettingsPage() {
       }
 
       setAcademyName(academy?.name ?? "");
+      setLogoUrl(academy?.logo_url ?? null);
     };
 
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Logo remove ───────────────────────────────────────────────────────────
+  const removeLogo = async () => {
+    if (!academyId) return;
+    if (!confirm("هل تريد حذف شعار الأكاديمية؟")) return;
+    setLogoUploading(true);
+    setMsg(null);
+    try {
+      // Clear logo_url in DB
+      const { error: aErr } = await supabase
+        .from("academies")
+        .update({ logo_url: null })
+        .eq("id", academyId);
+
+      if (aErr) throw new Error(`فشل حذف الشعار: ${aErr.message}`);
+
+      setLogoUrl(null);
+      clearSidebarCache();
+      showMsg("✅ تم حذف الشعار.", "ok");
+    } catch (e: unknown) {
+      showMsg(e instanceof Error ? e.message : "حدث خطأ أثناء حذف الشعار.", "err");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  // ── Logo upload ───────────────────────────────────────────────────────────
+  const uploadLogo = async (file: File) => {
+    if (!academyId) return;
+    setLogoUploading(true);
+    setMsg(null);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+      const path = `${academyId}/logo.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from("academy-logos")
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (upErr) throw new Error(`فشل رفع الشعار: ${upErr.message}`);
+
+      const { data } = supabase.storage.from("academy-logos").getPublicUrl(path);
+      const url = `${data.publicUrl}?t=${Date.now()}`;
+
+      const { error: aErr } = await supabase
+        .from("academies")
+        .update({ logo_url: url })
+        .eq("id", academyId);
+
+      if (aErr) throw new Error(`فشل حفظ الشعار: ${aErr.message}`);
+
+      setLogoUrl(url);
+      clearSidebarCache();
+      showMsg("✅ تم رفع الشعار بنجاح.", "ok");
+    } catch (e: unknown) {
+      showMsg(e instanceof Error ? e.message : "حدث خطأ أثناء رفع الشعار.", "err");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const save = async () => {
@@ -138,7 +203,7 @@ export default function SettingsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <main className="flex-1 p-8">
+    <main className="flex-1 p-4 md:p-8">
         <h1 className="text-2xl font-semibold mb-2">الإعدادات</h1>
         <p className="text-white/60 mb-6">تعديل بياناتك الشخصية وبيانات الأكاديمية</p>
 
@@ -200,6 +265,65 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+
+            {/* Logo upload — owner/partner only */}
+            {(userRole === "owner" || userRole === "partner") && (
+              <div>
+                <label className="block text-xs text-white/60 mb-2">شعار الأكاديمية</label>
+                <div className="flex items-center gap-4">
+                  {/* Preview */}
+                  <div className="h-14 w-14 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                    {logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoUrl} alt="شعار الأكاديمية" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-xl font-bold text-white/30">
+                        {academyName ? academyName[0] : "A"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Upload / Remove buttons */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={logoUploading}
+                        className="h-9 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-medium transition disabled:opacity-60"
+                      >
+                        {logoUploading ? "جاري المعالجة..." : "رفع شعار"}
+                      </button>
+                      {logoUrl && (
+                        <button
+                          type="button"
+                          onClick={removeLogo}
+                          disabled={logoUploading}
+                          className="h-9 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-sm font-medium text-red-400 transition disabled:opacity-60"
+                        >
+                          حذف الشعار
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-white/35">
+                      JPG أو PNG أو WebP — حتى 2 MB
+                    </p>
+                  </div>
+
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadLogo(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             {academyId && (
               <div>

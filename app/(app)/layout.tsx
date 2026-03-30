@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import Sidebar from "@/app/components/Sidebar";
+import NotificationBell from "@/app/components/NotificationBell";
 
 export default function AppLayout({
   children,
@@ -47,9 +50,18 @@ export default function AppLayout({
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span className="text-sm font-semibold">AcademyBase</span>
-          {/* Spacer to keep title centered */}
-          <div className="w-9" />
+          <Link href="/dashboard" className="flex items-center">
+            <Image
+              src="/logo-1.png"
+              alt="AcademyBase"
+              width={120}
+              height={32}
+              priority
+              className="h-8 w-auto"
+            />
+          </Link>
+          {/* Notification bell */}
+          <NotificationBell />
         </header>
 
         {children}

@@ -278,16 +278,29 @@ export async function updateMemberAction(
       .eq("academy_id", auth.academyId);
 
     if (data.role !== "partner" && data.branchIds.length > 0) {
-      const rows = data.branchIds.map((branchId) => ({
-        academy_id: auth.academyId,
-        user_id:    targetUserId,
-        branch_id:  branchId,
-      }));
-      const { error: insertErr } = await admin
-        .from("member_branch_access")
-        .insert(rows);
+      // Validate all branch IDs belong to this academy before inserting
+      const { data: validBranches } = await admin
+        .from("branches")
+        .select("id")
+        .eq("academy_id", auth.academyId)
+        .in("id", data.branchIds);
 
-      if (insertErr) return { error: insertErr.message };
+      const validIds = new Set((validBranches ?? []).map((b: { id: string }) => b.id));
+      const rows = data.branchIds
+        .filter((branchId) => validIds.has(branchId))
+        .map((branchId) => ({
+          academy_id: auth.academyId,
+          user_id:    targetUserId,
+          branch_id:  branchId,
+        }));
+
+      if (rows.length > 0) {
+        const { error: insertErr } = await admin
+          .from("member_branch_access")
+          .insert(rows);
+
+        if (insertErr) return { error: insertErr.message };
+      }
     }
 
     return {};
@@ -394,7 +407,7 @@ export async function acceptInvitationAction(
     }
     if (inv.email.toLowerCase() !== user.email?.toLowerCase()) {
       return {
-        error: `هذه الدعوة مخصصة للبريد "${inv.email}" فقط. تأكد من تسجيل الدخول بالبريد الصحيح.`,
+        error: `هذا الحساب غير مخوّل لقبول هذه الدعوة. تأكد من تسجيل الدخول بالبريد الصحيح.`,
       };
     }
 
@@ -444,14 +457,25 @@ export async function acceptInvitationAction(
         .eq("user_id", user.id)
         .eq("academy_id", inv.academy_id);
 
-      const rows = branchIds.map((branchId) => ({
-        academy_id: inv.academy_id,
-        user_id:    user.id,
-        branch_id:  branchId,
-      }));
-      const { error: baErr } = await admin
-        .from("member_branch_access")
-        .insert(rows);
+      // Validate branch IDs belong to this academy
+      const { data: validBranches2 } = await admin
+        .from("branches")
+        .select("id")
+        .eq("academy_id", inv.academy_id)
+        .in("id", branchIds);
+
+      const validBranchIds = new Set((validBranches2 ?? []).map((b: { id: string }) => b.id));
+      const rows = branchIds
+        .filter((branchId) => validBranchIds.has(branchId))
+        .map((branchId) => ({
+          academy_id: inv.academy_id,
+          user_id:    user.id,
+          branch_id:  branchId,
+        }));
+
+      const { error: baErr } = rows.length > 0
+        ? await admin.from("member_branch_access").insert(rows)
+        : { error: null };
 
       if (baErr) return { error: `فشل تعيين الفروع: ${baErr.message}` };
     }

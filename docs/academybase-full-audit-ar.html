@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تقرير المراجعة الشاملة – AcademyBase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #0b1220;
+      --card:      #161a30;
+      --card2:     #1c2240;
+      --accent:    #00ff9c;
+      --accent2:   #00e0ff;
+      --border:    rgba(255,255,255,0.06);
+      --border2:   rgba(255,255,255,0.10);
+      --text:      #f4f4f9;
+      --text-sec:  rgba(255,255,255,0.65);
+      --text-muted:rgba(255,255,255,0.38);
+      --red:       #ff4d6d;
+      --orange:    #ff9f43;
+      --yellow:    #ffd166;
+      --green:     #06d6a0;
+      --radius:    14px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Cairo', 'Segoe UI', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.85;
+      font-size: 15px;
+      direction: rtl;
+      text-align: right;
+    }
+
+    /* ── Cover Page ── */
+    .cover {
+      min-height: 100vh;
+      background: linear-gradient(145deg, #0b1220 0%, #0f1a35 50%, #0b1220 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 40px;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+    }
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -180px; left: -180px;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,255,156,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cover::after {
+      content: '';
+      position: absolute;
+      bottom: -180px; right: -180px;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,224,255,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cover-badge {
+      display: inline-block;
+      background: rgba(0,255,156,0.08);
+      border: 1px solid rgba(0,255,156,0.25);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      padding: 6px 20px;
+      border-radius: 50px;
+      margin-bottom: 32px;
+      text-transform: uppercase;
+    }
+    .cover-logo {
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+    }
+    .cover-logo span { color: var(--accent); }
+    .cover-subtitle {
+      font-size: 16px;
+      color: var(--text-sec);
+      margin-bottom: 52px;
+      font-weight: 400;
+    }
+    .cover-title {
+      font-size: 52px;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.75) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .cover-desc {
+      font-size: 17px;
+      color: var(--text-sec);
+      max-width: 560px;
+      line-height: 1.9;
+      margin-bottom: 56px;
+    }
+    .cover-meta {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .cover-meta-item {
+      text-align: center;
+    }
+    .cover-meta-item .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .cover-meta-item .value {
+      font-size: 15px;
+      color: var(--text);
+      font-weight: 700;
+    }
+    .cover-divider {
+      width: 60px;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      margin: 40px auto;
+    }
+    .cover-sections {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      max-width: 700px;
+      width: 100%;
+    }
+    .cover-section-pill {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 10px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sec);
+    }
+
+    /* ── Page Layout ── */
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 60px 48px;
+    }
+
+    /* ── Section Header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 36px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border2);
+    }
+    .section-number {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 900;
+      color: #0b1220;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .section-title span {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card-title .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    /* ── Severity Badges ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 12px;
+      border-radius: 50px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .badge-critical { background: rgba(255,77,109,0.15); color: var(--red); border: 1px solid rgba(255,77,109,0.3); }
+    .badge-high     { background: rgba(255,159,67,0.15); color: var(--orange); border: 1px solid rgba(255,159,67,0.3); }
+    .badge-medium   { background: rgba(255,209,102,0.15); color: var(--yellow); border: 1px solid rgba(255,209,102,0.3); }
+    .badge-low      { background: rgba(0,255,156,0.10); color: var(--accent); border: 1px solid rgba(0,255,156,0.25); }
+    .badge-good     { background: rgba(6,214,160,0.10); color: var(--green); border: 1px solid rgba(6,214,160,0.25); }
+
+    /* ── Alert Boxes ── */
+    .alert {
+      border-radius: var(--radius-sm);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      border-right: 4px solid;
+      font-size: 14px;
+      line-height: 1.75;
+    }
+    .alert-critical { background: rgba(255,77,109,0.07);  border-color: var(--red);    color: #ffc0cb; }
+    .alert-high     { background: rgba(255,159,67,0.07);  border-color: var(--orange); color: #ffdab3; }
+    .alert-medium   { background: rgba(255,209,102,0.07); border-color: var(--yellow); color: #fff0b3; }
+    .alert-good     { background: rgba(0,255,156,0.06);   border-color: var(--accent); color: #b3ffdd; }
+    .alert-info     { background: rgba(0,224,255,0.06);   border-color: var(--accent2);color: #b3f4ff; }
+    .alert strong   { font-weight: 700; }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 24px; border-radius: var(--radius); border: 1px solid var(--border); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    thead tr { background: rgba(255,255,255,0.04); }
+    th {
+      padding: 14px 18px;
+      text-align: right;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--text-sec);
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border2);
+    }
+    td {
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* ── Lists ── */
+    ul, ol {
+      padding-right: 20px;
+      margin: 10px 0;
+    }
+    li {
+      margin-bottom: 8px;
+      color: var(--text-sec);
+      line-height: 1.8;
+    }
+    li strong { color: var(--text); }
+    .check-list { list-style: none; padding-right: 0; }
+    .check-list li {
+      padding-right: 24px;
+      position: relative;
+      margin-bottom: 10px;
+    }
+    .check-list li::before {
+      content: '✓';
+      position: absolute;
+      right: 0;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .x-list { list-style: none; padding-right: 0; }
+    .x-list li {
+      padding-right: 24px;
+      position: relative;
+      margin-bottom: 10px;
+    }
+    .x-list li::before {
+      content: '✗';
+      position: absolute;
+      right: 0;
+      color: var(--red);
+      font-weight: 700;
+    }
+
+    /* ── Highlight Boxes ── */
+    .highlight-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .highlight-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+    }
+    .highlight-box .h-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .highlight-box.strengths .h-label { color: var(--accent); }
+    .highlight-box.weaknesses .h-label { color: var(--red); }
+
+    /* ── Stat Chips ── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-chip {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      text-align: center;
+    }
+    .stat-chip .num {
+      font-size: 32px;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-chip .lbl {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* ── Priority Roadmap ── */
+    .roadmap-phase {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .roadmap-phase-header {
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .roadmap-phase-num {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .phase-1 { background: rgba(255,77,109,0.15); color: var(--red); }
+    .phase-2 { background: rgba(255,159,67,0.15); color: var(--orange); }
+    .phase-3 { background: rgba(255,209,102,0.15); color: var(--yellow); }
+    .phase-4 { background: rgba(0,255,156,0.12); color: var(--accent); }
+    .roadmap-phase-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .roadmap-phase-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .roadmap-items {
+      padding: 18px 28px;
+    }
+    .roadmap-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .roadmap-item:last-child { border-bottom: none; }
+    .roadmap-item .ri-num {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .roadmap-item .ri-text {
+      flex: 1;
+      font-size: 13.5px;
+      color: var(--text-sec);
+    }
+    .roadmap-item .ri-text strong { color: var(--text); }
+
+    /* ── Score Card ── */
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .score-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 16px;
+      text-align: center;
+    }
+    .score-item .s-num {
+      font-size: 28px;
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+    .score-item .s-bar {
+      height: 3px;
+      border-radius: 2px;
+      margin: 8px auto;
+      width: 70%;
+    }
+    .score-item .s-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* ── Code snippet ── */
+    .code-hint {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      color: var(--accent2);
+      direction: ltr;
+      text-align: left;
+      margin: 10px 0;
+      overflow-x: auto;
+    }
+
+    /* ── Misc ── */
+    h2 { font-size: 20px; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+    h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
+    p  { color: var(--text-sec); line-height: 1.9; margin-bottom: 14px; }
+    .accent  { color: var(--accent); }
+    .accent2 { color: var(--accent2); }
+    .muted   { color: var(--text-muted); }
+    .text-red    { color: var(--red); }
+    .text-orange { color: var(--orange); }
+    .text-yellow { color: var(--yellow); }
+    .text-green  { color: var(--green); }
+
+    .separator {
+      height: 1px;
+      background: var(--border2);
+      margin: 44px 0;
+    }
+    .page-break { page-break-before: always; }
+
+    .inline-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 50px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .final-rec {
+      background: linear-gradient(135deg, rgba(0,255,156,0.05) 0%, rgba(0,224,255,0.05) 100%);
+      border: 1px solid rgba(0,255,156,0.15);
+      border-radius: var(--radius);
+      padding: 32px 36px;
+      margin-bottom: 24px;
+    }
+    .final-rec h3 {
+      font-size: 20px;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .cover { min-height: auto; padding: 80px 60px; }
+      .page { padding: 40px 48px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ COVER PAGE -->
+<div class="cover">
+  <div class="cover-badge">وثيقة سرية · للاستخدام الداخلي فقط</div>
+  <div class="cover-logo">Academy<span>Base</span></div>
+  <div class="cover-subtitle">نظام إدارة الأكاديميات الرياضية</div>
+  <div class="cover-divider"></div>
+  <div class="cover-title">تقرير المراجعة الشاملة<br/>للمنصة</div>
+  <p class="cover-desc">
+    مراجعة متكاملة وعميقة تشمل الأمان، تجربة المستخدم، جودة الكود،
+    الأداء، والتوصيات الاستراتيجية — مبنية على الكود الفعلي والبنية التقنية الحقيقية للمنصة.
+  </p>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="label">تاريخ التقرير</div>
+      <div class="value">28 مارس 2026</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">نطاق المراجعة</div>
+      <div class="value">شامل · 8 محاور</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">التقنيات</div>
+      <div class="value">Next.js 16 · Supabase · React 19</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">التقييم العام</div>
+      <div class="value" style="color: var(--yellow);">5.3 / 10</div>
+    </div>
+  </div>
+  <div class="cover-divider"></div>
+  <div class="cover-sections">
+    <div class="cover-section-pill">الملخص التنفيذي</div>
+    <div class="cover-section-pill">مراجعة الأمان</div>
+    <div class="cover-section-pill">تجربة المستخدم</div>
+    <div class="cover-section-pill">جودة الكود</div>
+    <div class="cover-section-pill">الأداء</div>
+    <div class="cover-section-pill">تحسينات المنتج</div>
+    <div class="cover-section-pill">خارطة الطريق</div>
+    <div class="cover-section-pill">التوصيات</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 1: EXECUTIVE SUMMARY -->
+<div class="page">
+  <div class="section-header">
+    <div class="section-number">1</div>
+    <div>
+      <div class="section-title">الملخص التنفيذي</div>
+      <span class="section-title"><span>نظرة عامة على المنصة وأبرز النتائج</span></span>
+    </div>
+  </div>
+
+  <p>
+    AcademyBase منصة طموحة حقيقية. النموذج التجاري مُصمَّم بعناية، وبنية أمان Supabase RLS مبنية بشكل صحيح، ومنطق الجلسات والتعويضات يُظهر نضجًا تقنيًا واضحًا. المنصة تعمل وتخدم المستخدمين بفاعلية.
+  </p>
+  <p>
+    لكن الكود وصل إلى نقطة تحوّل حرجة. عدة صفحات تحوّلت إلى ملفات ضخمة يصعب صيانتها — بعضها يتجاوز 1,000 سطر مع أكثر من 25 متغير حالة في مكوّن واحد. تحسينات الأداء الحيوية — مثل المشاهدات المادية، وترقيم الصفحات، والحفظ في الذاكرة المؤقتة — تم تعريفها لكنها لم تُفعَّل. تجربة المستخدم على الموبايل بها مشاكل جوهرية في كل صفحة تقريبًا.
+  </p>
+
+  <div class="stat-row">
+    <div class="stat-chip">
+      <div class="num" style="color: var(--red);">3</div>
+      <div class="lbl">مكوّنات ضخمة حرجة</div>
+    </div>
+    <div class="stat-chip">
+      <div class="num" style="color: var(--orange);">15+</div>
+      <div class="lbl">دوال تاريخ مكرّرة</div>
+    </div>
+    <div class="stat-chip">
+      <div class="num" style="color: var(--yellow);">0</div>
+      <div class="lbl">ترقيم صفحات فعّال</div>
+    </div>
+  </div>
+
+  <div class="highlight-grid">
+    <div class="highlight-box strengths">
+      <div class="h-label">✦ أبرز نقاط القوة</div>
+      <ul class="check-list">
+        <li>نموذج أمان RLS مُصمَّم بشكل صحيح ومتسق</li>
+        <li>منطق إلغاء الجلسات مع دعم التراجع</li>
+        <li>تخزين Promise على مستوى الوحدة لـ resolveAcademyId</li>
+        <li>الحسابات النقية في insights.ts منفصلة وقابلة للاختبار</li>
+        <li>واجهة عربية RTL صحيحة في معظمها</li>
+      </ul>
+    </div>
+    <div class="highlight-box weaknesses">
+      <div class="h-label">✦ أبرز نقاط الضعف</div>
+      <ul class="x-list">
+        <li>ثلاث صفحات ضخمة يصعب صيانتها</li>
+        <li>المشاهدات المادية موجودة لكن غير مُستخدَمة</li>
+        <li>تجربة الموبايل مكسورة في التقويم وجميع الجداول</li>
+        <li>لا ترقيم للصفحات في أي موقع</li>
+        <li>15+ دالة تاريخ مكرّرة عبر 4 صفحات</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(0,255,156,0.1)">⚡</div> أهم الخطوات التالية — بالترتيب</div>
+    <ol>
+      <li><strong>تفعيل المشاهدات المادية فورًا</strong> — توفر 60–80٪ من تكلفة استعلامات لوحة التحكم</li>
+      <li><strong>إضافة ترقيم الصفحات</strong> للاعبين والمعاملات المالية قبل نمو البيانات</li>
+      <li><strong>تفكيك المكوّنات الضخمة</strong> — players، finance، calendar</li>
+      <li><strong>إصلاح تجربة الموبايل</strong> على التقويم وجداول البيانات</li>
+      <li><strong>إغلاق الثغرات الأمنية</strong> في onboarding وقيود المفاتيح الأجنبية</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 2: SECURITY -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-number">2</div>
+    <div>
+      <div class="section-title">مراجعة الأمان</div>
+      <span class="section-title"><span>المصادقة · التفويض · RLS · نزاهة البيانات</span></span>
+    </div>
+  </div>
+
+  <!-- Strengths -->
+  <h2>✦ نقاط القوة الحالية</h2>
+  <div class="card">
+    <ul class="check-list">
+      <li><strong>RLS هو طبقة التحكم الرئيسية:</strong> بنية الأمان تعتمد بشكل صحيح على سياسات قاعدة البيانات بدلًا من منطق التطبيق.</li>
+      <li><strong>تصميم غير تكراري لـ RLS:</strong> تجنّب النظام المشكلة الكلاسيكية لحلقات RLS عبر استخدام دوال SECURITY DEFINER كـ my_academy_id().</li>
+      <li><strong>رموز الدعوة:</strong> تُولَّد بـ gen_random_bytes(32) = 256 بت من الإنتروبيا — آمنة تشفيريًا.</li>
+      <li><strong>العميل ذو الصلاحيات الكاملة محصور في Server Actions:</strong> لا يُكشَف أبدًا للمتصفح.</li>
+      <li><strong>حماية المالك من التخفيض:</strong> قبول دعوة بصلاحيات أقل لا يُخفّض المالك.</li>
+      <li><strong>تحديد نطاق الأكاديمية:</strong> جميع العمليات مرتبطة بـ profiles.academy_id.</li>
+    </ul>
+  </div>
+
+  <!-- Critical Issues -->
+  <h2>⚠ الثغرات والمخاطر</h2>
+
+  <div class="alert alert-critical">
+    <strong>[حرج] app/onboarding/page.tsx — السطر 59</strong><br/>
+    الصفحة تخزّن academy_id في localStorage رغم أن بنية النظام بأكملها تعتمد profiles.academy_id كمصدر وحيد للحقيقة. الأشد خطورةً أن import في السطر 7 يشير إلى مسار غير موجود (@/lib/supabase/client بدلًا من @/src/lib/supabase/browser). إذا تجاوز أي مستخدم إعادة التوجيه، يصطدم بخطأ 500. الحل: حذف هذه الصفحة بالكامل.
+  </div>
+
+  <div class="alert alert-high">
+    <strong>[عالي] لا فحوص للصلاحيات على مستوى واجهة المستخدم</strong><br/>
+    الصفحات تعرض أزرار الإنشاء والتعديل والحذف دون التحقق من صلاحية المستخدم أولًا عبر getMembership(). RLS ستمنع العملية على مستوى DB، لكن المستخدم يرى نتيجة محيرة بدلًا من رسالة واضحة. النمط الصحيح موجود في app/invite/actions.ts (دالة requireOwner()) لكنه غير مُطبَّق في بقية الأماكن.
+  </div>
+
+  <div class="alert alert-high">
+    <strong>[عالي] لا مفتاح أجنبي على member_branch_access.branch_id</strong><br/>
+    في app/invite/actions.ts الأسطر 280–285، يتم إدراج معرّفات الفروع القادمة من العميل دون التحقق من وجودها في جدول branches. هذا يُتيح إدراج صفوف يتيمة تُفسد الـ JOINs في سياسات RLS للمعاملات المالية واللاعبين.
+  </div>
+
+  <div class="alert alert-medium">
+    <strong>[متوسط] لا تحديد لمعدل إنشاء الدعوات</strong><br/>
+    لا يوجد rate limiting على createInvitationAction(). مالك الأكاديمية يمكنه إنشاء آلاف الدعوات في الدقيقة. إذا كان تسليم البريد الإلكتروني مُفعَّلًا، يتحوّل هذا إلى ناقل بريد مزعج.
+  </div>
+
+  <div class="alert alert-medium">
+    <strong>[متوسط] رسالة خطأ الدعوة تكشف البريد الإلكتروني</strong><br/>
+    السطر 397 في actions.ts يعرض بريد المدعو في رسالة الخطأ: "هذه الدعوة مخصصة للبريد {inv.email} فقط". يُتيح هذا للمهاجم اكتشاف أي عناوين بريد مدعوّة في الأكاديمية.
+  </div>
+
+  <div class="alert alert-low">
+    <strong>[منخفض] لا قيد CHECK على تنسيق البريد الإلكتروني في DB</strong><br/>
+    التحقق يتم في JavaScript فقط. إضافة CHECK constraint على جدول invitations يمنع إدراج بيانات غير صحيحة من أي مسار آخر.
+  </div>
+
+  <!-- Fix Priority Table -->
+  <h2 style="margin-top:32px">ترتيب الإصلاحات حسب الأولوية</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>الأولوية</th>
+          <th>الإجراء المطلوب</th>
+          <th>الخطورة</th>
+          <th>الجهد</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1</strong></td>
+          <td>حذف app/onboarding/page.tsx بالكامل</td>
+          <td><span class="badge badge-critical">حرج</span></td>
+          <td>منخفض جدًا</td>
+        </tr>
+        <tr>
+          <td><strong>2</strong></td>
+          <td>إضافة FK: member_branch_access.branch_id → branches(id) ON DELETE CASCADE</td>
+          <td><span class="badge badge-high">عالي</span></td>
+          <td>منخفض</td>
+        </tr>
+        <tr>
+          <td><strong>3</strong></td>
+          <td>إضافة getMembership() قبل عرض أزرار التعديل والحذف</td>
+          <td><span class="badge badge-high">عالي</span></td>
+          <td>متوسط</td>
+        </tr>
+        <tr>
+          <td><strong>4</strong></td>
+          <td>تعميم رسالة خطأ الدعوة — إزالة البريد الإلكتروني منها</td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+          <td>منخفض جدًا</td>
+        </tr>
+        <tr>
+          <td><strong>5</strong></td>
+          <td>إضافة rate limiting على createInvitationAction (10 دعوات/ساعة)</td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+          <td>متوسط</td>
+        </tr>
+        <tr>
+          <td><strong>6</strong></td>
+          <td>إضافة CHECK constraint على invitations.email في DB</td>
+          <td><span class="badge badge-low">منخفض</span></td>
+          <td>منخفض</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 3: UX -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-number">3</div>
+    <div>
+      <div class="section-title">مراجعة تجربة المستخدم</div>
+      <span class="section-title"><span>موبايل · تابلت · كمبيوتر</span></span>
+    </div>
+  </div>
+
+  <!-- Mobile -->
+  <h2>📱 الموبايل (أقل من 640px)</h2>
+
+  <div class="alert alert-critical">
+    <strong>التقويم — مكسور على الموبايل</strong><br/>
+    شبكة التقويم تستخدم min-h-[90px] لخلايا الأيام. على هاتف 375px مع 7 أعمدة، كل خلية عرضها ~53px وارتفاعها 90px. شارات الأحداث وأزرار الإلغاء/الاستعادة وأرقام الأيام كلها تتنافس في هذا الحيز الضيق. النتيجة غير قابلة للقراءة. هذا هو أكبر إخفاق في تجربة المستخدم على المنصة بأكملها.
+  </div>
+
+  <div class="alert alert-critical">
+    <strong>الجداول — مكسورة في كل الصفحات</strong><br/>
+    صفحات اللاعبين والمالية والموظفين والفروع تستخدم جداول أفقية تبدأ من min-w-[620px] إلى min-w-[860px] دون بديل بتصميم البطاقات على الموبايل. لا يوجد مؤشر بصري (ظل تمرير، إشارة "مرر للرؤية") يُعلم المستخدم بإمكانية التمرير. المستخدمون الحقيقيون سيعتقدون أن الجدول لا يحوي مزيدًا من البيانات.
+  </div>
+
+  <div class="alert alert-high">
+    <strong>مناطق اللمس — أصغر من الحد الأدنى المقبول</strong><br/>
+    الحد الأدنى وفق WCAG هو 44×44px. عبر المنصة: أزرار الإجراءات في الجداول (size="xs" ≈ 28px)، أزرار الفلترة (px-3 py-1.5 text-xs ≈ 28px)، أزرار واتساب وبطاقات التنبيهات (text-[10px]) — جميعها أصغر من الحد المطلوب.
+  </div>
+
+  <div class="alert alert-high">
+    <strong>حالات التحميل — لا هياكل عظمية، انزياح تخطيط في كل صفحة</strong><br/>
+    نص "جاري التحميل..." بلا حركة ولا هياكل عظمية. كل تحميل للصفحة يسبب انزياحًا مرئيًا واضحًا عند ظهور البطاقات والجداول. على الاتصالات البطيئة تكون التجربة مزعجة.
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">مشاكل إضافية على الموبايل</div>
+      <ul>
+        <li><strong>شارة الإشعارات:</strong> تستخدم top-1 left-1 في RTL — يجب أن تكون top-1 right-1</li>
+        <li><strong>النوافذ المنبثقة:</strong> بعضها يستخدم p-0 على الموبايل مما يجعل النص ملاصقًا لحواف الشاشة</li>
+        <li><strong>قوائم التاريخ في النوافذ:</strong> لا ترقيم للصفحات — اللاعب بسجلين سنتين يُحمِّل كل شيء دفعة واحدة</li>
+        <li><strong>التقويم:</strong> لا دعم للتمرير الأفقي للتنقل بين الأشهر</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">مشاكل الشريط الجانبي</div>
+      <ul>
+        <li><strong>العرض الثابت:</strong> w-[260px] — عريض جدًا على شاشات 320px</li>
+        <li><strong>لا هيكل عظمي للتحميل:</strong> اسم الأكاديمية يظهر ثم يُستبدَل مسببًا قفزة بصرية</li>
+        <li><strong>حجم الأيقونات:</strong> 20×20px يبدو غير متناسب مع النص العربي</li>
+        <li><strong>زر الإغلاق:</strong> ✕ مقبول لكن بدون منطقة لمس مُوسَّعة</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Tablet -->
+  <h2 style="margin-top: 8px;">💻 التابلت (640px – 1024px)</h2>
+
+  <div class="card">
+    <p>التابلت يقع في منطقة رمادية. تقفز تخطيطات الشبكة من عمود واحد (موبايل) مباشرة إلى 2 أو 4 أعمدة (كمبيوتر)، والنقاط الوسيطة غير مُعالَجة دائمًا. النوافذ المنبثقة المُصمَّمة للكمبيوتر (max-w-[760px]) قد تبدو مضغوطة. الشريط الجانبي يتحول من overlay إلى sticky عند md: (768px) — مما يعني أن iPad في الوضع الرأسي (768px) قد يرى الشريط الجانبي المتداخل.</p>
+    <ul>
+      <li>النوافذ المنبثقة بعرض 760px بدون sm:max-w-[90vw] قد تتجاوز الشاشة</li>
+      <li>لوحة تفاصيل الرواتب تعرض 2 أعمدة على الشاشات الصغيرة مع نصوص عربية طويلة تُكسر المحاذاة</li>
+      <li>محدد الأيام في الفروع يستخدم grid-cols-2 على الموبايل (4 صفوف لـ 7 أيام) — مزدحم جدًا</li>
+    </ul>
+  </div>
+
+  <!-- Desktop -->
+  <h2>🖥 الكمبيوتر</h2>
+
+  <div class="card">
+    <p>تجربة الكمبيوتر هي الأفضل. التخطيط مترابط عند 1280px+. المشاكل الرئيسية على هذا الحجم:</p>
+    <ul>
+      <li>لا عناوين عمود ثابتة (sticky) عند التمرير الطويل في الجداول</li>
+      <li>لا فواصل آلاف في الأرقام المالية (1000 بدلًا من 1,000 د.ك)</li>
+      <li>لوحة التشخيص التطويري في /branches تأخذ مساحة مرئية في بيئة التطوير</li>
+      <li>البيانات الوصفية في app/layout.tsx لا تزال "Create Next App" — غير مُحدَّثة للعلامة التجارية</li>
+    </ul>
+  </div>
+
+  <!-- UX Priority Table -->
+  <h2 style="margin-top:8px">أكثر مشاكل UX إلحاحًا</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>المشكلة</th><th>الصفحة المتأثرة</th><th>الخطورة</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>التقويم غير قابل للقراءة على الموبايل</td><td>التقويم</td><td><span class="badge badge-critical">حرج</span></td></tr>
+        <tr><td>لا بديل للبطاقات بدل الجداول على الموبايل</td><td>اللاعبون، المالية، الموظفون، الفروع</td><td><span class="badge badge-critical">حرج</span></td></tr>
+        <tr><td>مناطق اللمس أصغر من 44px</td><td>جميع الصفحات</td><td><span class="badge badge-high">عالي</span></td></tr>
+        <tr><td>لا هياكل عظمية للتحميل — انزياح تخطيط</td><td>جميع الصفحات</td><td><span class="badge badge-high">عالي</span></td></tr>
+        <tr><td>لا مؤشرات على إمكانية التمرير الأفقي</td><td>جميع الصفحات</td><td><span class="badge badge-high">عالي</span></td></tr>
+        <tr><td>شارة الإشعارات على الجانب الخاطئ (RTL)</td><td>التخطيط العام</td><td><span class="badge badge-medium">متوسط</span></td></tr>
+        <tr><td>النوافذ بدون padding على الموبايل (p-0)</td><td>اللاعبون، المالية</td><td><span class="badge badge-medium">متوسط</span></td></tr>
+        <tr><td>لا ترقيم في قوائم السجل والمعاملات</td><td>اللاعبون، المالية</td><td><span class="badge badge-medium">متوسط</span></td></tr>
+        <tr><td>لا فواصل آلاف في العملات</td><td>المالية، لوحة التحكم</td><td><span class="badge badge-medium">متوسط</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 4: CODE QUALITY -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-number">4</div>
+    <div>
+      <div class="section-title">مراجعة الكود والبنية</div>
+      <span class="section-title"><span>الديون التقنية · فرص التنظيف · أولويات إعادة الهيكلة</span></span>
+    </div>
+  </div>
+
+  <!-- Scorecard -->
+  <h2>تقييم جودة الكود</h2>
+  <div class="score-grid">
+    <div class="score-item">
+      <div class="s-num" style="color:var(--yellow)">7</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--yellow),transparent);"></div>
+      <div class="s-label">البنية العامة</div>
+    </div>
+    <div class="score-item">
+      <div class="s-num" style="color:var(--green)">8</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--green),transparent);"></div>
+      <div class="s-label">أمان الأنواع TypeScript</div>
+    </div>
+    <div class="score-item">
+      <div class="s-num" style="color:var(--red)">5</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--red),transparent);"></div>
+      <div class="s-label">معالجة الأخطاء</div>
+    </div>
+    <div class="score-item">
+      <div class="s-num" style="color:var(--red)">4</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--red),transparent);"></div>
+      <div class="s-label">إعادة استخدام الكود</div>
+    </div>
+    <div class="score-item">
+      <div class="s-num" style="color:var(--red)">4</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--red),transparent);"></div>
+      <div class="s-label">تصميم المكوّنات</div>
+    </div>
+    <div class="score-item">
+      <div class="s-num" style="color:var(--orange)">5</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--orange),transparent);"></div>
+      <div class="s-label">جلب البيانات</div>
+    </div>
+    <div class="score-item">
+      <div class="s-num" style="color:var(--red)">3</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--red),transparent);"></div>
+      <div class="s-label">الاختبارات</div>
+    </div>
+    <div class="score-item">
+      <div class="s-num" style="color:var(--yellow)">6</div>
+      <div class="s-bar" style="background:linear-gradient(90deg,var(--yellow),transparent);"></div>
+      <div class="s-label">التوثيق</div>
+    </div>
+  </div>
+  <div class="alert alert-medium" style="text-align:center">
+    <strong>التقييم الإجمالي: 5.3 / 10</strong> — المنصة تعمل لكنها تزداد صعوبة في الصيانة مع النمو. تحتاج إلى إعادة هيكلة فورية للملفات الكبيرة وتوحيد المساعدات قبل إضافة أي ميزات جديدة.
+  </div>
+
+  <!-- God Components -->
+  <h2 style="margin-top:28px">المكوّنات الضخمة — الخطر الأكبر</h2>
+
+  <div class="card">
+    <div class="card-title"><span class="badge badge-critical">حرج</span>&nbsp; app/(app)/players/page.tsx</div>
+    <ul>
+      <li>تجاوز <strong>1,000 سطر</strong> مع أكثر من <strong>25 متغير useState</strong></li>
+      <li>أربع أنواع نوافذ منبثقة مدمجة: إضافة، تعديل، تجديد، توسيع، سجل</li>
+      <li>منطق رفع الصور، إنشاء الدفعات، أحداث الاشتراك، اكتشاف التكرار — كلها في ملف واحد</li>
+      <li>استدعاءات مباشرة لـ 5 جداول Supabase من المكوّن نفسه</li>
+    </ul>
+    <div class="alert alert-info" style="margin-top:12px">
+      <strong>الحل:</strong> استخراج PlayerAddModal · PlayerEditModal · PlayerHistoryModal · PlayerAvatarUpload · usePlayerData hook
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="badge badge-critical">حرج</span>&nbsp; app/(app)/finance/page.tsx</div>
+    <ul>
+      <li>يُقدَّر بأكثر من <strong>1,000 سطر</strong></li>
+      <li>منطق التجميع متعدد المستويات (GroupedTxView مع SubItem) مضمّن في الصفحة</li>
+      <li>منطق وضع الطباعة، الفلترة، الترتيب، التصنيف — كلها داخل ملف واحد</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="badge badge-high">عالي</span>&nbsp; app/(app)/calendar/page.tsx</div>
+    <ul>
+      <li>أكثر من <strong>500 سطر</strong></li>
+      <li>توليد الجلسات، بناء شبكة التقويم، منطق الإلغاء، كل النوافذ — في مكان واحد</li>
+      <li>CancelSessionDialog و EventFormModal مُكرَّران بين التقويم وصفحة اللاعبين</li>
+    </ul>
+  </div>
+
+  <!-- Duplications -->
+  <h2 style="margin-top:8px">التكرارات الكبيرة</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>ما يتكرر</th><th>عدد النسخ</th><th>الملفات المتأثرة</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>دوال تنسيق التاريخ (isoToDate، monthKey، إلخ)</td><td><strong>15+ دالة</strong></td><td>players، calendar، dashboard، finance</td></tr>
+        <tr><td>دالة formatError()</td><td><strong>3 تطبيقات</strong></td><td>utils.ts، players/page.tsx، finance/page.tsx</td></tr>
+        <tr><td>خريطة أسماء الأيام العربية</td><td><strong>3–4 نسخ</strong></td><td>players.ts، calendar.tsx، staff-attendance.ts</td></tr>
+        <tr><td>تسميات الأشهر العربية</td><td><strong>3 نسخ</strong></td><td>calendar.tsx، dashboard.tsx، finance.tsx</td></tr>
+        <tr><td>خريطة ألوان حالة اللاعب</td><td><strong>2 نسخ</strong></td><td>players.tsx، dashboard.tsx</td></tr>
+        <tr><td>كود خلفية النوافذ المنبثقة</td><td><strong>8+ أماكن</strong></td><td>جميع الصفحات</td></tr>
+        <tr><td>نوع Player (بأشكال مختلفة)</td><td><strong>2 نسخ متعارضتان</strong></td><td>players/page.tsx مقابل dashboard/page.tsx</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Missing Abstractions -->
+  <h2>تجريدات مفقودة</h2>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Hooks مخصصة مفقودة</div>
+      <ul>
+        <li><strong>useAsync / useDataLoader:</strong> كل صفحة تعيد تطبيق نمط loading/error/data</li>
+        <li><strong>useForm:</strong> التحقق من صحة البيانات مكرّر في كل نافذة</li>
+        <li><strong>usePagination:</strong> لا وجود له حاليًا</li>
+        <li><strong>useDebounce:</strong> قد يكون موجودًا لكن غير مُوحَّد</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">مكوّنات مشتركة مفقودة</div>
+      <ul>
+        <li><strong>&lt;Modal&gt; wrapper:</strong> كود خلفية النافذة مكرّر 8+ مرات</li>
+        <li><strong>&lt;Table&gt; wrapper:</strong> لكل صفحة تطبيقها الخاص</li>
+        <li><strong>&lt;EmptyState&gt;:</strong> غير متسق عبر الصفحات</li>
+        <li><strong>&lt;SkeletonCard&gt;:</strong> غير موجود أصلًا</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Refactor Priority -->
+  <h2>أولويات إعادة الهيكلة</h2>
+  <div class="roadmap-phase">
+    <div class="roadmap-phase-header">
+      <div class="roadmap-phase-num phase-1">!</div>
+      <div><div class="roadmap-phase-title">حرج — يؤثر على الموثوقية</div><div class="roadmap-phase-desc">افعلها قبل كتابة أي سطر كود جديد</div></div>
+    </div>
+    <div class="roadmap-items">
+      <div class="roadmap-item"><div class="ri-num">1</div><div class="ri-text">إنشاء <strong>src/lib/date-utils.ts</strong> — توحيد 15+ دالة تاريخ مكرّرة</div></div>
+      <div class="roadmap-item"><div class="ri-num">2</div><div class="ri-text">إنشاء <strong>src/lib/constants.ts</strong> — الأيام العربية، الأشهر، الألوان، الأرقام السحرية</div></div>
+      <div class="roadmap-item"><div class="ri-num">3</div><div class="ri-text">إزالة formatError() من ملفات الصفحات — الكود موجود في src/lib/utils.ts</div></div>
+      <div class="roadmap-item"><div class="ri-num">4</div><div class="ri-text">إضافة طبقة تحقق من المدخلات قبل كتابة Supabase</div></div>
+    </div>
+  </div>
+
+  <div class="roadmap-phase">
+    <div class="roadmap-phase-header">
+      <div class="roadmap-phase-num phase-2">↑</div>
+      <div><div class="roadmap-phase-title">عالي — يؤثر على قابلية الصيانة</div></div>
+    </div>
+    <div class="roadmap-items">
+      <div class="roadmap-item"><div class="ri-num">5</div><div class="ri-text">تفكيك <strong>players/page.tsx</strong> إلى 4–5 ملفات مكوّن + hook مخصص</div></div>
+      <div class="roadmap-item"><div class="ri-num">6</div><div class="ri-text">إنشاء مكوّن <strong>&lt;Modal&gt;</strong> مشترك لإلغاء الكود المكرّر في 8 أماكن</div></div>
+      <div class="roadmap-item"><div class="ri-num">7</div><div class="ri-text">إنشاء hook <strong>useAsync</strong> لنمط جلب البيانات</div></div>
+      <div class="roadmap-item"><div class="ri-num">8</div><div class="ri-text">توحيد نوع Player — إزالة النسختين المتعارضتين</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 5: PERFORMANCE -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-number">5</div>
+    <div>
+      <div class="section-title">مراجعة الأداء</div>
+      <span class="section-title"><span>الاختناقات الحالية · مخاطر التوسع · التحسينات الأعلى تأثيرًا</span></span>
+    </div>
+  </div>
+
+  <!-- Critical Bottleneck -->
+  <div class="alert alert-critical">
+    <strong>[حرج] المشاهدات المادية موجودة في DB لكن لا يستخدمها أي كود</strong><br/>
+    ملف supabase/29_materialized_views.sql يُعرِّف ثلاث مشاهدات محسوبة مسبقًا:<br/>
+    mv_monthly_revenue (إيرادات/مصروفات/ربح شهري) · mv_attendance_rate · mv_renewal_rate<br/>
+    لا يستدعيها أي كود في التطبيق. لوحة التحكم تحسب الأرباح يدويًا من جدول المعاملات الخام. صفحة الإحصاءات تحسب معدلات التجديد من الصفر. هذا التحسين الأعلى تأثيرًا — لا يتطلب سوى توجيه الاستعلامات الموجودة نحو المشاهدات.
+  </div>
+
+  <!-- N+1 -->
+  <h2>استعلامات N+1 — مشاكل قائمة</h2>
+  <div class="card">
+    <div class="card-title"><span class="badge badge-high">عالي</span>&nbsp; extendBranchPlayersByOneSession — players.ts</div>
+    <p>تجلب قائمة اللاعبين المؤهلين (1 استعلام)، ثم تستدعي updatePlayer() لكل لاعب على حدة عبر Promise.all. لـ 50 لاعبًا في الفرع = <strong>51 رحلة إلى قاعدة البيانات</strong>.</p>
+    <div class="code-hint">-- الحل: UPDATE players SET sessions = sessions + 1 WHERE id = ANY($1::uuid[])</div>
+    <p style="margin:0">جملة SQL واحدة تُنجز العمل كله.</p>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="badge badge-medium">متوسط</span>&nbsp; فلترة الجانب العميل بدل WHERE في DB</div>
+    <ul>
+      <li>sessions.ts السطر 329: يجلب كل جلسات الشهر ثم يُصفِّي status === 'cancelled' في JavaScript</li>
+      <li>sessions.ts الأسطر 410–423: يجلب كل سجلات الحضور ثم يُصفِّي deduct_from_salary في JavaScript</li>
+      <li>الحل في كلتا الحالتين: إضافة .eq('status', 'cancelled') أو .eq('deduct_from_salary', true) مباشرة في الاستعلام</li>
+    </ul>
+  </div>
+
+  <!-- Pagination -->
+  <h2>غياب ترقيم الصفحات — خطر التوسع الحرج</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>الدالة</th><th>الملف</th><th>المخاطر عند النمو</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>listPlayers()</td><td>players.ts</td><td>أكاديمية بـ 300 لاعب تجلب الكل في كل تحميل</td></tr>
+        <tr><td>listFinanceTx()</td><td>finance.ts</td><td>بيانات سنتين دون حد أقصى</td></tr>
+        <tr><td>listPayments()</td><td>payments.ts</td><td>كل الدفعات دفعة واحدة</td></tr>
+        <tr><td>listAttendanceByMonth()</td><td>attendance.ts</td><td>منخفض الخطورة للتجميع الشهري</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Scaling Risks -->
+  <h2>مخاطر التوسع</h2>
+  <div class="stat-row">
+    <div class="stat-chip">
+      <div class="num" style="color:var(--orange)">200</div>
+      <div class="lbl">لاعب — حيث يبدأ التباطؤ المحسوس</div>
+    </div>
+    <div class="stat-chip">
+      <div class="num" style="color:var(--red)">500</div>
+      <div class="lbl">معاملة مالية — حيث يتدهور الأداء بشدة</div>
+    </div>
+    <div class="stat-chip">
+      <div class="num" style="color:var(--red)">10+</div>
+      <div class="lbl">فروع — حيث يصبح منطق التقويم مكلفًا</div>
+    </div>
+  </div>
+
+  <!-- Quick wins table -->
+  <h2>أعلى التحسينات تأثيرًا على الأداء</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>التحسين</th><th>الجهد</th><th>التأثير</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>استخدام mv_monthly_revenue في لوحة التحكم والإحصاءات</td>
+          <td><span class="badge badge-low">منخفض</span></td>
+          <td><span class="badge badge-critical">حرج</span></td>
+        </tr>
+        <tr>
+          <td>إضافة .eq('status', 'cancelled') بدل الفلترة في JavaScript</td>
+          <td><span class="badge badge-low">تافه</span></td>
+          <td><span class="badge badge-high">عالي</span></td>
+        </tr>
+        <tr>
+          <td>إضافة ترقيم الصفحات لقائمة اللاعبين (حد 50 + إزاحة)</td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+          <td><span class="badge badge-high">عالي</span></td>
+        </tr>
+        <tr>
+          <td>ترقيم صفحات المعاملات المالية</td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+          <td><span class="badge badge-high">عالي</span></td>
+        </tr>
+        <tr>
+          <td>تغليف generateTrainingSessions() بـ useMemo</td>
+          <td><span class="badge badge-low">تافه</span></td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+        </tr>
+        <tr>
+          <td>تحديث لاعبي الفرع بـ UPDATE...WHERE id = ANY()</td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+        </tr>
+        <tr>
+          <td>إضافة indexes مركّبة على finance_tx و staff_attendance</td>
+          <td><span class="badge badge-low">منخفض</span></td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+        </tr>
+        <tr>
+          <td>تحميل Recharts بشكل كسول (React.lazy)</td>
+          <td><span class="badge badge-low">منخفض</span></td>
+          <td><span class="badge badge-medium">متوسط</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- DB Indexes -->
+  <h2>فهارس قاعدة البيانات المقترحة</h2>
+  <div class="card">
+    <ul>
+      <li><strong>finance_tx (academy_id, month):</strong> مُستخدَم بكثافة في لوحة التحكم والمالية — فهرس مركّب مفقود</li>
+      <li><strong>staff_attendance (academy_id, staff_id, branch_id, date):</strong> academy_id غير مدرج في الفهرس الحالي مما يُجبر على مسح كامل عبر الأكاديميات</li>
+      <li><strong>sessions (academy_id, branch_id, date):</strong> موجود بالفعل ✓</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 6: PRODUCT IMPROVEMENTS -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-number">6</div>
+    <div>
+      <div class="section-title">التحسينات عالية الأثر على المنتج</div>
+      <span class="section-title"><span>تحسينات مبنية على الكود والمنتج الفعلي — لا أفكار عشوائية</span></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(255,77,109,0.15)">📅</div> 1. تجربة تقويم حقيقية على الموبايل</div>
+    <p>التقويم هو الشاشة التشغيلية الأكثر استخدامًا في الأكاديمية الرياضية. المدربون والموظفون يتحققون منه يوميًا على هواتفهم. الشبكة الحالية غير قابلة للاستخدام على الموبايل. الحل: <strong>عرض اليوم الواحد على الموبايل</strong> — قائمة رأسية بجلسات اليوم المحدد مع إمكانية التمرير الأفقي بين الأيام. هذا تغيير تشغيلي وليس تجميليًا.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(0,224,255,0.12)">⚡</div> 2. "جدِّد الآن" مباشرة من بطاقة التنبيه</div>
+    <p>نظام التنبيهات يحدد اللاعبين المنتهية اشتراكاتهم. لكن إجراء التجديد يتطلب: التنبيهات → نسخ الاسم → الذهاب للاعبين → البحث عن اللاعب → فتح النافذة → تجديد. إضافة <strong>زر "جدِّد الآن" مباشرة على بطاقة التنبيه</strong> يُغلق الدورة ويجعل التنبيهات قابلة للتنفيذ بنقرة واحدة.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(255,209,102,0.12)">📊</div> 3. لوحة تحكم تحكي قصة مالية — لا مجرد أرقام</div>
+    <p>لوحة التحكم الحالية تعرض بطاقات مقاييس (إيرادات، مصروفات، صافي ربح). لكن لا يوجد خط اتجاه، ولا مقارنة شهرية. إضافة <strong>مؤشر sparkline</strong> بجانب كل مقياس مالي — مدعوم بـ mv_monthly_revenue الموجودة أصلًا — يحوّل لوحة التحكم من لقطة ثابتة إلى أداة قرار فعلية.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(0,255,156,0.10)">☑</div> 4. عمليات جماعية على اللاعبين</div>
+    <p>الأكاديميات التي تدير 100+ لاعب تحتاج لإجراءات جماعية: تجديد جميع اللاعبين المنتهية اشتراكاتهم في فرع، إرسال واتساب لمجموعة. منطق التوسيع موجود بالفعل (extendBranchPlayersByOneSession) لكن لا واجهة لاختيار مجموعة. <strong>تحديد متعدد مع شريط إجراءات عائم</strong> سيُقلص وقت العمل التشغيلي بشكل كبير.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(255,159,67,0.12)">💰</div> 5. تقرير ربحية لكل فرع</div>
+    <p>لا توجد حاليًا طريقة لرؤية "الفرع أ حقّق 2,000 د.ك إيرادات وتكاليف موظفين 500 د.ك". بيانات الفرع مُرفقة بالمعاملات بالفعل. إنشاء <strong>تقرير P&amp;L لكل فرع</strong> (إيرادات مقابل تكاليف الموظفين والإيجار) سيكون ذا قيمة عالية جدًا لأصحاب الأكاديميات متعددة الفروع.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(0,255,156,0.10)">🔔</div> 6. إشعارات فورية عبر Supabase Realtime</div>
+    <p>البنية التحتية للإشعارات موجودة بالكامل (27_notifications.sql، notifications.ts، NotificationBell.tsx). لكن الإشعارات تُحسَب عند الطلب. إضافة <strong>Supabase Realtime channel subscription</strong> على جدول الإشعارات يجعل التسليم فوريًا دون أي تغييرات على الخادم — استدعاء واحد فقط: supabase.channel().on('postgres_changes', ...).subscribe().</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(0,224,255,0.12)">📈</div> 7. معدل حضور اللاعب مرئي فورًا</div>
+    <p>المنصة تتتبع الحضور لكن لا تعرض معدل حضور اللاعب بشكل بارز. إظهار "أحمد حضر 18 من 24 جلسة (75٪)" <strong>مباشرة على بطاقة اللاعب</strong> يمنح المدربين إشارة تشغيلية فورية دون الحاجة للدخول في صفحة الحضور الفرعية.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="icon" style="background:rgba(255,209,102,0.12)">🖨</div> 8. تقرير شهري قابل للطباعة والمشاركة</div>
+    <p>أصحاب الأكاديميات يحتاجون لمشاركة ملخصات مالية وتقارير حضور مع الشركاء والمحاسبين. صفحة المالية بها وضع طباعة موجود بالفعل. تطويره إلى <strong>تقرير منسّق وجميل بصفحة واحدة لكل شهر</strong> يُلغي مهمة يدوية متكررة لكل أكاديمية.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 7: ROADMAP -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-number">7</div>
+    <div>
+      <div class="section-title">خارطة الطريق حسب الأولوية</div>
+      <span class="section-title"><span>من الفوري إلى المستقبلي — مُرتَّب حسب الأثر والجهد</span></span>
+    </div>
+  </div>
+
+  <div class="roadmap-phase">
+    <div class="roadmap-phase-header">
+      <div class="roadmap-phase-num phase-1">⚡</div>
+      <div>
+        <div class="roadmap-phase-title">فوري — هذا الأسبوع</div>
+        <div class="roadmap-phase-desc">مكاسب سريعة، جهد منخفض، تأثير فوري · لا تنتظر</div>
+      </div>
+    </div>
+    <div class="roadmap-items">
+      <div class="roadmap-item"><div class="ri-num">1</div><div class="ri-text"><strong>حذف app/onboarding/page.tsx</strong> — معطّل، import مكسور، خطر localStorage</div></div>
+      <div class="roadmap-item"><div class="ri-num">2</div><div class="ri-text"><strong>إصلاح شارة الإشعارات RTL</strong> — left-1 إلى right-1 في layout.tsx</div></div>
+      <div class="roadmap-item"><div class="ri-num">3</div><div class="ri-text"><strong>إضافة .eq('status', 'cancelled') في sessions.ts:329</strong> — تغيير سطر واحد يُلغي مسح جدول كامل</div></div>
+      <div class="roadmap-item"><div class="ri-num">4</div><div class="ri-text"><strong>نقل فلترة الحضور إلى WHERE clause</strong> في sessions.ts:410–423</div></div>
+      <div class="roadmap-item"><div class="ri-num">5</div><div class="ri-text"><strong>تغليف generateTrainingSessions() بـ useMemo</strong> — تغيير سطر واحد في calendar/page.tsx</div></div>
+      <div class="roadmap-item"><div class="ri-num">6</div><div class="ri-text"><strong>توجيه mv_monthly_revenue في لوحة التحكم</strong> بدل الحساب اليدوي</div></div>
+      <div class="roadmap-item"><div class="ri-num">7</div><div class="ri-text"><strong>إضافة FK على member_branch_access.branch_id</strong> — migration واحدة</div></div>
+      <div class="roadmap-item"><div class="ri-num">8</div><div class="ri-text"><strong>تعميم رسالة خطأ الدعوة</strong> — لا تكشف البريد الإلكتروني</div></div>
+    </div>
+  </div>
+
+  <div class="roadmap-phase">
+    <div class="roadmap-phase-header">
+      <div class="roadmap-phase-num phase-2">📅</div>
+      <div>
+        <div class="roadmap-phase-title">قصير المدى — 2 إلى 4 أسابيع</div>
+        <div class="roadmap-phase-desc">عمل أساسي — يبني الأساس لكل ما يليه</div>
+      </div>
+    </div>
+    <div class="roadmap-items">
+      <div class="roadmap-item"><div class="ri-num">9</div><div class="ri-text"><strong>إنشاء src/lib/date-utils.ts</strong> — توحيد 15+ دالة تاريخ مكرّرة</div></div>
+      <div class="roadmap-item"><div class="ri-num">10</div><div class="ri-text"><strong>إنشاء src/lib/constants.ts</strong> — الأيام العربية، الأشهر، ألوان الحالة، الأرقام الثابتة</div></div>
+      <div class="roadmap-item"><div class="ri-num">11</div><div class="ri-text"><strong>ترقيم صفحات listPlayers()</strong> — حد 50 + إزاحة مع واجهة ترقيم</div></div>
+      <div class="roadmap-item"><div class="ri-num">12</div><div class="ri-text"><strong>ترقيم صفحات listFinanceTx()</strong> — حرج قبل نمو أي أكاديمية بحجم حقيقي</div></div>
+      <div class="roadmap-item"><div class="ri-num">13</div><div class="ri-text"><strong>إعادة تصميم التقويم على الموبايل</strong> — عرض يومي رأسي مع تمرير أفقي بين الأيام</div></div>
+      <div class="roadmap-item"><div class="ri-num">14</div><div class="ri-text"><strong>إضافة بديل البطاقات بدل الجداول</strong> في صفحات اللاعبين والموظفين والفروع على الموبايل</div></div>
+      <div class="roadmap-item"><div class="ri-num">15</div><div class="ri-text"><strong>تحديث لاعبي الفرع بـ UPDATE...WHERE id = ANY()</strong> بدل N+1</div></div>
+      <div class="roadmap-item"><div class="ri-num">16</div><div class="ri-text"><strong>إضافة indexes مركّبة</strong> على finance_tx و staff_attendance</div></div>
+      <div class="roadmap-item"><div class="ri-num">17</div><div class="ri-text"><strong>إضافة getMembership() قبل عرض أزرار التعديل</strong> — أزرار مشروطة بالصلاحية</div></div>
+    </div>
+  </div>
+
+  <div class="roadmap-phase">
+    <div class="roadmap-phase-header">
+      <div class="roadmap-phase-num phase-3">🏗</div>
+      <div>
+        <div class="roadmap-phase-title">متوسط المدى — 1 إلى 2 شهر</div>
+        <div class="roadmap-phase-desc">بنية أساسية ورفع جودة المنتج</div>
+      </div>
+    </div>
+    <div class="roadmap-items">
+      <div class="roadmap-item"><div class="ri-num">18</div><div class="ri-text"><strong>تفكيك players/page.tsx</strong> إلى ملفات مكوّنات + usePlayerData hook</div></div>
+      <div class="roadmap-item"><div class="ri-num">19</div><div class="ri-text"><strong>تفكيك finance/page.tsx</strong> — استخراج FinanceTable، TransactionModal، FinanceSummary</div></div>
+      <div class="roadmap-item"><div class="ri-num">20</div><div class="ri-text"><strong>إنشاء مكوّن &lt;Modal&gt; مشترك</strong> — يُلغي كود الخلفية المكرّر في 8 أماكن</div></div>
+      <div class="roadmap-item"><div class="ri-num">21</div><div class="ri-text"><strong>إنشاء hook useAsync</strong> — يُستبدل نمط loading/error/data في كل الصفحات</div></div>
+      <div class="roadmap-item"><div class="ri-num">22</div><div class="ri-text"><strong>إضافة هياكل عظمية للتحميل</strong> في كل الصفحات — إلغاء انزياح التخطيط</div></div>
+      <div class="roadmap-item"><div class="ri-num">23</div><div class="ri-text"><strong>مراجعة شاملة لمناطق اللمس</strong> — رفع جميع العناصر التفاعلية إلى 44px</div></div>
+      <div class="roadmap-item"><div class="ri-num">24</div><div class="ri-text"><strong>توحيد إبطال الكاش</strong> — invalidateAllCaches() مُستدعى من تسجيل الخروج</div></div>
+      <div class="roadmap-item"><div class="ri-num">25</div><div class="ri-text"><strong>تقرير ربحية لكل فرع</strong> — إيرادات مقابل مصروفات مُجزَّأة حسب الفرع</div></div>
+      <div class="roadmap-item"><div class="ri-num">26</div><div class="ri-text"><strong>"جدِّد الآن" على بطاقات التنبيه</strong> — إغلاق الدورة من التنبيه للإجراء بنقرة واحدة</div></div>
+      <div class="roadmap-item"><div class="ri-num">27</div><div class="ri-text"><strong>إضافة rate limiting</strong> على إنشاء الدعوات وتسجيل الحسابات الجديدة</div></div>
+    </div>
+  </div>
+
+  <div class="roadmap-phase">
+    <div class="roadmap-phase-header">
+      <div class="roadmap-phase-num phase-4">🚀</div>
+      <div>
+        <div class="roadmap-phase-title">متقدم / المستقبل — 2 إلى 4 أشهر</div>
+        <div class="roadmap-phase-desc">ميزات المنصة المميزة وتحسينات البنية المتقدمة</div>
+      </div>
+    </div>
+    <div class="roadmap-items">
+      <div class="roadmap-item"><div class="ri-num">28</div><div class="ri-text"><strong>إشعارات فورية</strong> عبر Supabase Realtime channel subscription</div></div>
+      <div class="roadmap-item"><div class="ri-num">29</div><div class="ri-text"><strong>عمليات جماعية على اللاعبين</strong> — تحديد متعدد + شريط إجراءات عائم</div></div>
+      <div class="roadmap-item"><div class="ri-num">30</div><div class="ri-text"><strong>مؤشرات اتجاه sparkline</strong> في لوحة التحكم — مقارنة شهرية للمقاييس المالية</div></div>
+      <div class="roadmap-item"><div class="ri-num">31</div><div class="ri-text"><strong>معدل حضور اللاعب</strong> مرئي مباشرة على بطاقات اللاعبين</div></div>
+      <div class="roadmap-item"><div class="ri-num">32</div><div class="ri-text"><strong>تقرير شهري قابل للطباعة</strong> — تخطيط PDF/طباعة نظيف للمشاركة مع الشركاء</div></div>
+      <div class="roadmap-item"><div class="ri-num">33</div><div class="ri-text"><strong>تكامل React Query أو SWR</strong> — تخلّص من التكرار في الطلبات وإبطال الكاش بشكل صحيح</div></div>
+      <div class="roadmap-item"><div class="ri-num">34</div><div class="ri-text"><strong>ترحيل Server Components</strong> للبيانات الثابتة (الفروع، الموظفون)</div></div>
+      <div class="roadmap-item"><div class="ri-num">35</div><div class="ri-text"><strong>تغطية اختبارية</strong> — على الأقل لمنطق الإلغاء والتعويض وisPlayerActiveOnDate</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 8: STRATEGIC -->
+<div class="page page-break">
+  <div class="section-header">
+    <div class="section-number">8</div>
+    <div>
+      <div class="section-title">التوصيات الاستراتيجية</div>
+      <span class="section-title"><span>ماذا سنفعل بالضبط لو كنا قائدين لهذا المنتج؟</span></span>
+    </div>
+  </div>
+
+  <div class="final-rec">
+    <h3>الاستراتيجية الكاملة — بالترتيب الدقيق</h3>
+    <p>إليك بالضبط ما يجب فعله ولماذا ومتى:</p>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title"><span class="badge badge-critical">الأسبوع الأول</span>&nbsp; أغلق الثغرات وأوقف النزيف</div>
+    <p>ثلاثة أيام على المكاسب الثمانية الفورية. معظمها تغييرات في سطر واحد. مجتمعةً تُغلق الثغرات الأمنية، وتُلغي اثنتين من أخطاء الأداء من الفئة أ، وتُصلح خطأ RTL للإشعارات. التكلفة زهيدة والمكاسب قابلة للقياس.</p>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title"><span class="badge badge-high">الأسبوع الثاني والثالث</span>&nbsp; بنِ الأساس أولًا — لا تكتب كودًا جديدًا قبله</div>
+    <p>
+      أنشئ <strong>date-utils.ts</strong> و<strong>constants.ts</strong> قبل كتابة أي ميزة جديدة. هذان الملفان يُلغيان أكبر مصدر لمخاطر الصيانة في المشروع.
+    </p>
+    <div class="alert alert-info">
+      <strong>القاعدة الذهبية:</strong> لا تُضف صفحة جديدة أو ميزة جديدة والمساعدات المكرّرة لا تزال مبعثرة. الديون التقنية تتراكم بفائدة — كل صفحة جديدة تُبنى بينما دوال التاريخ مبعثرة ستُضيف نسخة أخرى منها.
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title"><span class="badge badge-medium">الأسبوع الثالث والرابع</span>&nbsp; أصلح الموبايل قبل أن يصبح مشكلة في المنتج</div>
+    <p>
+      صفحة التقويم غير قابلة للقراءة على الموبايل ليست مشكلة تجميلية — إنها سير عمل أساسي يعتمد عليه المستخدمون يوميًا. <strong>عرض اليوم الواحد على الموبايل</strong> هو إصلاح موجّه وليس إعادة كتابة كاملة. ثم أصلح فيضان الجداول في صفحات اللاعبين والمالية. هذه التغييرات الثلاثة ستُحوّل تجربة الموبايل جذريًا.
+    </p>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title"><span class="badge badge-low">الشهر الثاني</span>&nbsp; تفكيك المكوّنات الضخمة</div>
+    <p>
+      مع توحيد المساعدات، تفكيك <strong>players/page.tsx</strong> و<strong>finance/page.tsx</strong> يصبح أسرع بكثير. ابدأ باللاعبين — إنها الشاشة التشغيلية الأكثر استخدامًا. استخرج النوافذ وهوك البيانات. هذا ليس تجميلًا مبكرًا؛ هذه الملفات تُقيّد قدرتك على شحن ميزات جديدة بأمان.
+    </p>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title"><span class="badge badge-good">الشهر الثاني والثالث</span>&nbsp; ارفع مستوى المنتج</div>
+    <p>
+      بمجرد أن يكون الكود قابلًا للصيانة والموبايل يعمل، استثمر في ميزات المنتج التي تخلق ميزة تنافسية:
+    </p>
+    <ul class="check-list">
+      <li>تقرير ربحية الفروع — لا يوجد في برامج الإدارة العامة</li>
+      <li>"جدِّد الآن" على بطاقات التنبيهات — يُغلق الدورة التشغيلية بنقرة واحدة</li>
+      <li>إشعارات فورية — المنصة تبدو حيّة وليست ثابتة</li>
+      <li>هذه ميزات تخلق مسافة تنافسية حقيقية</li>
+    </ul>
+  </div>
+
+  <div class="alert alert-medium">
+    <strong>لا تفعل:</strong> إعادة كتابة كاملة. لا تنتقل من جلب البيانات على العميل إلى Server Components لكل شيء دفعة واحدة. لا تُضف React Query قبل تفكيك المكوّنات الضخمة وإضافة ترقيم الصفحات. لا تبدأ بناء ميزات جديدة (دعم متعدد الرياضات، بوابة أولياء الأمور) بينما تجربة الموبايل مكسورة على الشاشات الأساسية. التسلسل مهم — ابنِ على أساس متين وإلا ستورث المشاكل الحالية للميزات الجديدة.
+  </div>
+
+  <div class="final-rec" style="margin-top:32px">
+    <h3>الخلاصة النهائية</h3>
+    <p>
+      المنصة تمتلك أساسًا تقنيًا قويًا. الفجوة بين وضعها الحالي وما يمكن أن تكونه هي مسألة تنفيذ مُرتَّب، لا إعادة هيكلة من الصفر.
+    </p>
+    <p>
+      <strong style="color: var(--accent)">الأسبوع الأول:</strong> أغلق الثغرات الفورية.<br/>
+      <strong style="color: var(--accent)">الأسبوع 2–3:</strong> وحِّد الأدوات المشتركة، لا تكتب كودًا جديدًا قبلها.<br/>
+      <strong style="color: var(--accent)">الأسبوع 3–4:</strong> أصلح الموبايل — التقويم وجداول البيانات.<br/>
+      <strong style="color: var(--accent)">الشهر الثاني:</strong> تفكيك المكوّنات الضخمة.<br/>
+      <strong style="color: var(--accent)">الشهر 2–3:</strong> ميزات المنتج التي تخلق ميزة تنافسية حقيقية.
+    </p>
+    <p style="margin-bottom:0">
+      المنصة جاهزة للقفز إلى مستوى أعلى. الترتيب الصحيح للتنفيذ هو ما يصنع الفرق.
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <div class="separator"></div>
+  <div style="display:flex; justify-content:space-between; align-items:center; color:var(--text-muted); font-size:12px">
+    <div>AcademyBase — تقرير المراجعة الشاملة للمنصة</div>
+    <div>28 مارس 2026 · سري · للاستخدام الداخلي فقط</div>
+  </div>
+</div>
+
+</body>
+</html>
